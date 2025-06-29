@@ -32,7 +32,7 @@ type Server struct {
 	Host string
 }
 
-// Load Configurations
+// Load Configuration in main.go
 func Load() (*Config, error) {
 	godotenvvault.Load()
 
