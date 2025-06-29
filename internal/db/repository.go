@@ -11,6 +11,7 @@ func NewUserRepository(db *DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+// Create User
 func (r *UserRepository) Create(user *models.User) error {
 	query := `
 	INSERT INTO users (id, username, platform, uodated_at)
@@ -22,3 +23,5 @@ func (r *UserRepository) Create(user *models.User) error {
 	err := r.db.QueryRow(query, user.ID, user.Username, user.Platform).Scan(&user.CreatedAt)
 	return err
 }
+
+// Get User by ID
