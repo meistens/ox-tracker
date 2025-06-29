@@ -1,24 +1,83 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
+	"context"
 	"log"
-
-	_ "github.com/lib/pq"
+	"mtracker/internal/config"
+	"mtracker/internal/db"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 func main() {
-	fmt.Println("Starting connection with Postgres Db")
-	connStr := "postgres://postgres:postgres@localhost:5432/postgres"
-	db, err := sql.Open("postgres", connStr)
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to load config:", err)
 	}
-	defer db.Close()
-	if err = db.Ping(); err != nil {
-		log.Println("DB Ping Failed")
-		log.Fatal(err)
+
+	// initalize db
+	database, err := db.NewConnection(cfg.DatabaseURL.URL)
+	if err != nil {
+		log.Fatalf("Failed to initalize database: %v", err)
 	}
-	log.Println("DB Connection started successfully")
+	defer database.Close()
+
+	// migrations
+
+	mux := http.NewServeMux()
+
+	server := &http.Server{
+		Addr:    ":" + cfg.Server.Port,
+		Handler: mux,
+	}
+	// goroutine start server
+	go func() {
+		log.Printf("server starting on port %s", cfg.Server.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server shutdown complete")
 }
+
+// import (
+// 	"database/sql"
+// 	"fmt"
+// 	"log"
+
+// 	_ "github.com/lib/pq"
+// )
+
+// func main() {
+// 	fmt.Println("Starting connection with Postgres Db")
+// 	connStr := "postgres://postgres:postgres@localhost:5432/postgres"
+// 	db, err := sql.Open("postgres", connStr)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer db.Close()
+// 	if err = db.Ping(); err != nil {
+// 		log.Println("DB Ping Failed")
+// 		log.Fatal(err)
+// 	}
+// 	log.Println("DB Connection started successfully")
+// }
