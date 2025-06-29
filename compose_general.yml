@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:latest # strictly dev. only!
+    container_name: my_postgres # subject to change
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER} # use like this for the rest
+      - POSTGRES_PASSWORD=postgres # aloways change admin pwd for obvious reasons
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db_init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432" # subject to change in case of conflicting ones
+    command: -c ssl=on -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem -c ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+volumes:
+  pgdata:
