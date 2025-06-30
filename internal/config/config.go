@@ -6,12 +6,15 @@ import (
 	"github.com/dotenv-org/godotenvvault"
 )
 
-// Configurations
+// Config struct, holds all config settings
+// should be in main.go like the others, but nope
+// say it deserves its own file
 type Config struct {
 	DatabaseURL Database
 	APIKeys     API
 	BotTokens   Bot
 	Server      Server
+	Env         Environ
 }
 
 type Database struct {
@@ -32,6 +35,12 @@ type Server struct {
 	Host string
 }
 
+type Environ struct {
+	Development string
+	Staging     string
+	Production  string
+}
+
 // Load Configuration in main.go
 func Load() (*Config, error) {
 	godotenvvault.Load()
@@ -50,6 +59,11 @@ func Load() (*Config, error) {
 		Server: Server{
 			Port: os.Getenv("PORT"),
 			Host: os.Getenv("HOST"),
+		},
+		Env: Environ{
+			Development: os.Getenv("DEV"),
+			Staging:     os.Getenv("STAGE"),
+			Production:  os.Getenv("PROD"),
 		},
 	}, nil
 }
