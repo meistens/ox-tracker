@@ -21,7 +21,7 @@ func NewUserRepository(db *DB) *UserRepository {
 // Create User
 func (r *UserRepository) Create(user *models.User) error {
 	query := `
-	INSERT INTO users (id, username, platform, uodated_at)
+	INSERT INTO users (id, username, platform, updated_at)
 	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
 	ON CONFLICT (id) DO UPDATE SET
 	username = $2, platform = $3, updated_at = CURRENT_TIMESTAMP
