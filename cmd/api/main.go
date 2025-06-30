@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"mtracker/internal/config"
 	"mtracker/internal/db"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -17,6 +19,12 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to load config:", err)
 	}
+
+	// use flags to read values for ports and environment
+	// default to using set parameters if no values is passed
+	flag.IntVar(&cfg.Server.Port, "Port", 5000, "App server Port") // test to see which one returns what port
+	flag.StringVar(&cfg.Env, "Env", "development", "Environment (dev|stage|prod... all in full letters)")
+	flag.Parse()
 
 	// initalize db
 	database, err := db.NewConnection(cfg.DatabaseURL.URL)
@@ -28,14 +36,15 @@ func main() {
 	// migrations
 
 	mux := http.NewServeMux()
+	addr := cfg.Server.Port
 
 	server := &http.Server{
-		Addr:    ":" + cfg.Server.Port,
+		Addr:    ":" + strconv.Itoa(addr),
 		Handler: mux,
 	}
 	// goroutine start server
 	go func() {
-		log.Printf("server starting on port %s", cfg.Server.Port)
+		log.Printf("server starting on port %d", cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}
