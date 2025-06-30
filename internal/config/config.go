@@ -15,7 +15,7 @@ type Config struct {
 	APIKeys     API
 	BotTokens   Bot
 	Server      Server
-	Env         Environ
+	Env         string
 }
 
 type Database struct {
@@ -36,12 +36,6 @@ type Server struct {
 	Host string
 }
 
-type Environ struct {
-	Development string
-	Staging     string
-	Production  string
-}
-
 // Load Configuration in main.go
 func Load() (*Config, error) {
 	godotenvvault.Load()
@@ -60,11 +54,6 @@ func Load() (*Config, error) {
 		Server: Server{
 			Port: getEnvAsInt("PORT", 5000),
 			Host: os.Getenv("HOST"),
-		},
-		Env: Environ{
-			Development: os.Getenv("DEV"),
-			Staging:     os.Getenv("STAGE"),
-			Production:  os.Getenv("PROD"),
 		},
 	}, nil
 }
