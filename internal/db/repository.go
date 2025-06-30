@@ -1,6 +1,8 @@
 package db
 
-import "mtracker/internal/models"
+import (
+	"mtracker/internal/models"
+)
 
 // UserRepository handles user-related database ops
 type UserRepository struct {
@@ -44,4 +46,8 @@ func (r *UserRepository) GetByID(id string) (*models.User, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+func NewMediaRepository(db *DB) *MediaRepository {
+	return &MediaRepository{db: db}
 }
