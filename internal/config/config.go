@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/dotenv-org/godotenvvault"
 )
@@ -31,7 +32,7 @@ type Bot struct {
 }
 
 type Server struct {
-	Port string
+	Port int
 	Host string
 }
 
@@ -57,7 +58,7 @@ func Load() (*Config, error) {
 			TelegramToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		},
 		Server: Server{
-			Port: os.Getenv("PORT"),
+			Port: getEnvAsInt("PORT", 5000),
 			Host: os.Getenv("HOST"),
 		},
 		Env: Environ{
@@ -66,4 +67,13 @@ func Load() (*Config, error) {
 			Production:  os.Getenv("PROD"),
 		},
 	}, nil
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
 }
