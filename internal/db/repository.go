@@ -7,6 +7,11 @@ type UserRepository struct {
 	db *DB
 }
 
+// MediaRepository handles media-related database ops
+type MediaRepository struct {
+	db *DB
+}
+
 func NewUserRepository(db *DB) *UserRepository {
 	return &UserRepository{db: db}
 }
@@ -25,3 +30,18 @@ func (r *UserRepository) Create(user *models.User) error {
 }
 
 // Get User by ID
+func (r *UserRepository) GetByID(id string) (*models.User, error) {
+	query := `SELECT id, username, platform, created_at, updated_at
+	FROM users
+	WHERE id = $1`
+
+	user := &models.User{}
+	err := r.db.QueryRow(query, id).Scan(
+		&user.ID, &user.Username, &user.Platform, &user.CreatedAt, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
