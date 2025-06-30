@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -20,6 +21,8 @@ func NewConnection(databaseURL string) (*DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
+
+	log.Println("Database connection established successfully")
 
 	database := &DB{db}
 	if err := database.createTables(); err != nil {
