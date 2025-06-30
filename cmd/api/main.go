@@ -39,12 +39,15 @@ func main() {
 	addr := cfg.Server.Port
 
 	server := &http.Server{
-		Addr:    ":" + strconv.Itoa(addr),
-		Handler: mux,
+		Addr:         ":" + strconv.Itoa(addr),
+		Handler:      mux,
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 	// goroutine start server
 	go func() {
-		log.Printf("server starting on port %d", cfg.Server.Port)
+		log.Printf("starting %s server starting on port %d", cfg.Env, cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}
