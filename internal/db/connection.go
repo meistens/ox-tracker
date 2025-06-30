@@ -12,6 +12,7 @@ type DB struct {
 	*sql.DB
 }
 
+// New Database&Connection
 func NewConnection(databaseURL string) (*DB, error) {
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
@@ -32,6 +33,7 @@ func NewConnection(databaseURL string) (*DB, error) {
 	return database, nil
 }
 
+// Create Tables needed for user-related ops
 func (db *DB) createTables() error {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
