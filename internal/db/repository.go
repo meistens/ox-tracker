@@ -4,13 +4,8 @@ import (
 	"mtracker/internal/models"
 )
 
-// UserRepository handles user-related database ops
+// User-related database ops
 type UserRepository struct {
-	db *DB
-}
-
-// MediaRepository handles media-related database ops
-type MediaRepository struct {
 	db *DB
 }
 
@@ -18,8 +13,7 @@ func NewUserRepository(db *DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// Create User
-func (r *UserRepository) Create(user *models.User) error {
+func (r *UserRepository) CreateUser(user *models.User) error {
 	query := `
 	INSERT INTO users (id, username, platform, updated_at)
 	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
@@ -31,8 +25,7 @@ func (r *UserRepository) Create(user *models.User) error {
 	return err
 }
 
-// Get User by ID
-func (r *UserRepository) GetByID(id string) (*models.User, error) {
+func (r *UserRepository) GetUserByID(id string) (*models.User, error) {
 	query := `SELECT id, username, platform, created_at, updated_at
 	FROM users
 	WHERE id = $1`
@@ -46,6 +39,11 @@ func (r *UserRepository) GetByID(id string) (*models.User, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+// Media-Related database ops
+type MediaRepository struct {
+	db *DB
 }
 
 func NewMediaRepository(db *DB) *MediaRepository {
