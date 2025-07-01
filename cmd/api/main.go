@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+// application struct
+type application struct {
+	config config.Config
+}
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -33,10 +38,14 @@ func main() {
 	}
 	defer database.Close()
 
-	// migrations
+	app := &application{
+		config: *cfg,
+	}
 
+	// TODO: instance of...
 	mux := http.NewServeMux()
 	addr := cfg.Server.Port
+	mux.HandleFunc("/v1/health", app.healthCheckHandler)
 
 	server := &http.Server{
 		Addr:         ":" + strconv.Itoa(addr),
