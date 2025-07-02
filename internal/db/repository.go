@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"mtracker/internal/models"
 )
 
@@ -54,9 +55,15 @@ func (r *MediaRepository) CreateMedia(media *models.Media) error {
 	query := `
 	INSERT INTO media (external_id, title, type, description, release_date, poster_url, rating)
 	VALUES ($1, $2, $3, $4, $5, $6, $7)
+	ON CONFLICT (external_id) DO NOTHING
 	RETURNING id, created_at
 	`
 	err := r.db.QueryRow(query, media.ExternalID, media.Title, media.Type, media.Description, media.ReleaseDate, media.PosterURL, media.Rating).Scan(&media.ID, &media.CreatedAt)
+
+	if err == sql.ErrNoRows {
+		// TODO: logic for log/whatever to return
+		return nil
+	}
 
 	return err
 }
@@ -98,4 +105,30 @@ func (r *MediaRepository) GetByID(id int) (*models.Media, error) {
 		return nil, err
 	}
 	return media, nil
+}
+
+// UserMedia handles media tracking-related ops
+type UserMediaRepository struct {
+	db *DB
+}
+
+func NewUserMediaRepository(db *DB) *UserMediaRepository {
+	return &UserMediaRepository{db: db}
+}
+
+func (r *UserMediaRepository) InsertUserMedia(userMedia *models.UserMedia) error {
+	query := `
+	INSERT INTO user_media (user_id, media_id, status, progress, rating, notes, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	ON CONFLICT (user_id, media_id)
+	DO UPDATE SET status = $3, progress = $4, rating = $5, notes = $6, updated_at = CURRENT_TIMESTAMP
+	RETURNING id, created_at
+	`
+
+	err := r.db.QueryRow(
+		query, userMedia.UserID, userMedia.MediaID, userMedia.Status,
+		userMedia.Progress, userMedia.Rating, userMedia.Notes).
+		Scan(&userMedia.ID, &userMedia.CreatedAt)
+
+	return err
 }

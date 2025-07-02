@@ -31,3 +31,26 @@ func SeedMediaFromJSON(database *db.DB, jsonPath string) {
 		}
 	}
 }
+
+func SeedUserMediaFromJSON(database *db.DB, jsonPath string) {
+	file, err := os.Open(jsonPath)
+	if err != nil {
+		log.Fatalf("Failed to open user_media seed file: %v", err)
+	}
+	defer file.Close()
+
+	var userMediaItems []models.UserMedia
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&userMediaItems); err != nil {
+		log.Fatalf("Failed to decode user_media JSON: %v", err)
+	}
+
+	r := db.NewUserMediaRepository(database)
+	for _, um := range userMediaItems {
+		if err := r.InsertUserMedia(&um); err != nil {
+			log.Printf("Failed to insert user_media for user %s and media_id %d: %v", um.UserID, um.MediaID, err)
+		} else {
+			log.Printf("Inserted user_media for user %s and media_id %d", um.UserID, um.MediaID)
+		}
+	}
+}
