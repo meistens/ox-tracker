@@ -61,7 +61,7 @@ func (r *MediaRepository) CreateMedia(media *models.Media) (bool, error) {
 	err := r.db.QueryRow(query, media.ExternalID, media.Title, media.Type, media.Description, media.ReleaseDate, media.PosterURL, media.Rating).Scan(&media.ID, &media.CreatedAt)
 
 	if err == sql.ErrNoRows {
-		// TODO: logic for log/whatever to return
+		// TODO: extend logic to cover real usecase or modify when ready
 		return false, nil
 	}
 	if err != nil {
