@@ -51,7 +51,7 @@ func NewMediaRepository(db *DB) *MediaRepository {
 	return &MediaRepository{db: db}
 }
 
-func (r *MediaRepository) CreateMedia(media *models.Media) error {
+func (r *MediaRepository) CreateMedia(media *models.Media) (bool, error) {
 	query := `
 	INSERT INTO media (external_id, title, type, description, release_date, poster_url, rating)
 	VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -62,10 +62,13 @@ func (r *MediaRepository) CreateMedia(media *models.Media) error {
 
 	if err == sql.ErrNoRows {
 		// TODO: logic for log/whatever to return
-		return nil
+		return false, nil
+	}
+	if err != nil {
+		return false, err
 	}
 
-	return err
+	return true, nil
 }
 
 func (r *MediaRepository) GetByExtID(externalID string) (*models.Media, error) {

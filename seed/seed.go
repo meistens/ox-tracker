@@ -24,10 +24,13 @@ func SeedMediaFromJSON(database *db.DB, jsonPath string) {
 
 	r := db.NewMediaRepository(database)
 	for _, m := range mediaItems {
-		if err := r.CreateMedia(&m); err != nil {
+		inserted, err := r.CreateMedia(&m)
+		if err != nil {
 			log.Printf("Failed to insert media %s: %v", m.Title, err)
-		} else {
+		} else if inserted {
 			log.Printf("Inserted media: %s", m.Title)
+		} else {
+			log.Printf("Media %s already exists, skipping", m.Title)
 		}
 	}
 }
