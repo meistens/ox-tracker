@@ -1,0 +1,26 @@
+[
+  {
+    "user_id": "user1",
+    "media_id": 1,
+    "status": "completed",
+    "progress": 1,
+    "rating": 9.5,
+    "notes": "All-time favorite."
+  },
+  {
+    "user_id": "user2",
+    "media_id": 2,
+    "status": "watching",
+    "progress": 1,
+    "rating": 9.0,
+    "notes": "Classic mafia movie."
+  },
+  {
+    "user_id": "user1",
+    "media_id": 2,
+    "status": "plan_to_read",
+    "progress": 0,
+    "rating": 0,
+    "notes": "Will watch soon."
+  }
+]
