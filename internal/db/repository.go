@@ -49,3 +49,14 @@ type MediaRepository struct {
 func NewMediaRepository(db *DB) *MediaRepository {
 	return &MediaRepository{db: db}
 }
+
+func (r *MediaRepository) CreateMedia(media *models.Media) error {
+	query := `
+	INSERT INTO media (external_id, title, type, description, release_date, poster_url, rating)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)
+	RETURNING id, created_at
+	`
+	err := r.db.QueryRow(query, media.ExternalID, media.Title, media.Type, media.Description, media.ReleaseDate, media.PosterURL, media.Rating).Scan(&media.ID, &media.CreatedAt)
+
+	return err
+}
