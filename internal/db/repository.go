@@ -60,3 +60,23 @@ func (r *MediaRepository) CreateMedia(media *models.Media) error {
 
 	return err
 }
+
+func (r *MediaRepository) GetByExtID(externalID string) (*models.Media, error) {
+	query := `
+	SELECT id, external_id, title, type, description, release_date, poster_url, rating, created_at
+	FROM media
+	WHERE external_id = $1
+	`
+
+	media := &models.Media{}
+	err := r.db.QueryRow(query, externalID).Scan(
+		&media.ID, &media.ExternalID, &media.Title, &media.Type,
+		&media.Description, &media.ReleaseDate, &media.PosterURL,
+		&media.Rating, &media.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	return media, nil
+}
