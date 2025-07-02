@@ -6,6 +6,7 @@ import (
 	"log"
 	"mtracker/internal/config"
 	"mtracker/internal/db"
+	"mtracker/seed"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,6 +39,9 @@ func main() {
 	}
 	defer database.Close()
 
+	//seed
+	seed.SeedMediaFromJSON(database, "./seed/media_seed.json")
+	// seed
 	app := &application{
 		config: *cfg,
 	}
