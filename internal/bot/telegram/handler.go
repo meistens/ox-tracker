@@ -250,3 +250,47 @@ func (t *TelegramHandler) formatListResults(message string) string {
 
 	return formatted
 }
+
+// getCommandEmoji
+func (t *TelegramHandler) getCommandEmoji(command string) string {
+	switch command {
+	case "search":
+		return "🔍"
+	case "add":
+		return "➕"
+	case "status":
+		return "📝"
+	case "list":
+		return "📋"
+	case "rate":
+		return "⭐"
+	case "progress":
+		return "📈"
+	case "remind":
+		return "⏰"
+	default:
+		return "✅"
+	}
+}
+
+// getCommandTitle
+func (t *TelegramHandler) getCommandTitle(command string) string {
+	switch command {
+	case "search":
+		return "Search Results"
+	case "add":
+		return "Media Added"
+	case "status":
+		return "Status Updated"
+	case "list":
+		return "Your Media List"
+	case "rate":
+		return "Rating Updated"
+	case "progress":
+		return "Progress Updated"
+	case "remind":
+		return "Reminder Set"
+	default:
+		return "Success"
+	}
+}

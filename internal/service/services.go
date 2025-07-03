@@ -6,3 +6,5 @@ import "mtracker/internal/models"
 type MediaTracker interface {
 	HandleBotCommand(cmd *models.BotCommand) *models.BotResponse
 }
+
+type MediaTrackerImpl struct{}
