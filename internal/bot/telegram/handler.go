@@ -226,6 +226,7 @@ func (t *TelegramHandler) formatSearchResults(message string) string {
 	formatted = strings.ReplaceAll(formatted, "4.", "4️⃣")
 	formatted = strings.ReplaceAll(formatted, "5.", "5️⃣")
 
+	// ID formatting
 	lines := strings.Split(formatted, "\n")
 	for i, line := range lines {
 		if strings.Contains(line, "Rating:") {
@@ -235,3 +236,17 @@ func (t *TelegramHandler) formatSearchResults(message string) string {
 	return strings.Join(lines, "\n")
 }
 
+// formatListResults
+func (t *TelegramHandler) formatListResults(message string) string {
+	if strings.Contains(message, "No media found") {
+		return "Your list is empty! Use /search to find media to add"
+	}
+
+	formatted := message
+	formatted = strings.ReplaceAll(formatted, "ID:", "🆔 *ID:*")
+	formatted = strings.ReplaceAll(formatted, "Status:", "📊 *Status:*")
+	formatted = strings.ReplaceAll(formatted, "Progress:", "📈 *Progress:*")
+	formatted = strings.ReplaceAll(formatted, "Rating:", "⭐ *Rating:*")
+
+	return formatted
+}
