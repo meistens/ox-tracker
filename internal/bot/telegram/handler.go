@@ -3,15 +3,10 @@ package telegram
 import (
 	"fmt"
 	"log"
-	"mtracker/internal/models"
+	"mtracker/internal/service"
 	"net/http"
 	"time"
 )
-
-// Circular import prevention
-type MediaTracker interface {
-	HandleBotCommand(cmd *models.BotCommand) *models.BotResponse
-}
 
 // TG API Types
 type Update struct {
@@ -62,13 +57,13 @@ type InlineKeyboardButton struct {
 
 type TelegramHandler struct {
 	token        string
-	mediaTracker MediaTracker
+	mediaTracker service.MediaTracker
 	httpClient   *http.Client
 	baseURL      string
 	prefix       string
 }
 
-func NewTelegramHandler(token string, mediaTracker MediaTracker) *TelegramHandler {
+func NewTelegramHandler(token string, mediaTracker service.MediaTracker) *TelegramHandler {
 	return &TelegramHandler{
 		token:        token,
 		mediaTracker: mediaTracker,
