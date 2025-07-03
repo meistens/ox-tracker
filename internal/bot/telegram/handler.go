@@ -359,6 +359,7 @@ func (t *TelegramHandler) SendReminder(userID, mediaTitle, message string) error
 	return t.sendMessage(chatID, reminderText, "Markdown")
 }
 
+// SetWebhook sets up webhook for receiving updates
 func (t *TelegramHandler) SetWebhook(webhookURL string) error {
 	url := fmt.Sprintf("%s/setWebhook", t.baseURL)
 
