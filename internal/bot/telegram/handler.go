@@ -202,3 +202,36 @@ func (t *TelegramHandler) sendResponse(chatID int64, response *models.BotRespons
 
 	t.sendMessage(chatID, text.String(), "Markdown")
 }
+
+// formatResponseText
+func (t *TelegramHandler) formatResponseText(message, command string) string {
+	// TODO: formatSearchResults
+	switch command {
+	case "search":
+		return t.formatSearchResults(message)
+	case "list":
+		return t.formatListResults(message)
+	default:
+		return message
+	}
+}
+
+// formatSearchResults
+func (t *TelegramHandler) formatSearchResults(message string) string {
+	// Replace numbers with emojis of choice and add formatting, or get rid of it...
+	formatted := message
+	formatted = strings.ReplaceAll(formatted, "1.", "1️⃣")
+	formatted = strings.ReplaceAll(formatted, "2.", "2️⃣")
+	formatted = strings.ReplaceAll(formatted, "3.", "3️⃣")
+	formatted = strings.ReplaceAll(formatted, "4.", "4️⃣")
+	formatted = strings.ReplaceAll(formatted, "5.", "5️⃣")
+
+	lines := strings.Split(formatted, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "Rating:") {
+			lines[i] = strings.ReplaceAll(line, "Rating:", "5️⃣  *Rating:*")
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
