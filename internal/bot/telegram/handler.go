@@ -358,3 +358,29 @@ func (t *TelegramHandler) SendReminder(userID, mediaTitle, message string) error
 	reminderText := fmt.Sprintf("⏰ *Reminder*\n\n*%s*\n\n%s", mediaTitle, message)
 	return t.sendMessage(chatID, reminderText, "Markdown")
 }
+
+func (t *TelegramHandler) SetWebhook(webhookURL string) error {
+	url := fmt.Sprintf("%s/setWebhook", t.baseURL)
+
+	request := map[string]interface{}{
+		"url": webhookURL,
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API error: %s", string(body))
+	}
+
+	return nil
+}
