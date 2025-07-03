@@ -1,10 +1,13 @@
 package telegram
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"mtracker/internal/service"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -82,4 +85,56 @@ func (t *TelegramHandler) Start() error {
 func (t *TelegramHandler) Stop() error {
 	log.Println("Telegram bot stopped")
 	return nil
+}
+
+// Process incoming webhook updates
+func (t *TelegramHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Failed to read request body: %v", err)
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	var update Update
+	if err := json.Unmarshal(body, &update); err != nil {
+		log.Printf("Failed to unmarshal update: %v", err)
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	t.handleUpdate(update)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (t *TelegramHandler) handleUpdate(update Update) {
+	message := update.Message
+
+	// ignore msg from bots
+	if message.From.IsBot {
+		return
+	}
+
+	//ignore empty msgs
+	if message.Text == "" {
+		return
+	}
+
+	// handle commands
+	// TODO: handleCommand function
+	if strings.HasPrefix(message.Text, t.prefix) {
+		t.handleCommand(message)
+		return
+	}
+
+	// handle plaintext
+	// TODO: handlePlaintext function
+	if message.Chat.Type == "private" {
+		t.handlePlaintext(message)
+	}
 }
