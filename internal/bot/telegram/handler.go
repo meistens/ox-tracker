@@ -385,3 +385,21 @@ func (t *TelegramHandler) SetWebhook(webhookURL string) error {
 
 	return nil
 }
+
+// DeleteWebhook removes webhook
+func (t *TelegramHandler) DeleteWebhook() error {
+	url := fmt.Sprintf("%s/deleteWebhook", t.baseURL)
+
+	resp, err := t.httpClient.Post(url, "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API error: %s", string(body))
+	}
+
+	return nil
+}
