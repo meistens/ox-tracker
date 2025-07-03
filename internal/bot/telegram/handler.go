@@ -333,3 +333,5 @@ func (t *TelegramHandler) sendMessage(chatID int64, text, parseMode string) erro
 
 	return nil
 }
+
+// All TODOs done!
