@@ -113,6 +113,7 @@ type JikanAnime struct {
 }
 
 // Bot Command Models
+// Should work for Discord as well...
 type BotCommand struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
