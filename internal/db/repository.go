@@ -135,3 +135,58 @@ func (r *UserMediaRepository) InsertUserMedia(userMedia *models.UserMedia) error
 
 	return err
 }
+
+func (r *UserMediaRepository) GetByUserAndMedia(userID string, mediaID int) (*models.UserMedia, error) {
+	query := `
+	SELECT id, user_id, media_id, status, progress, rating, notes, created_at, updated_at
+	FROM user_media
+	WHERE user_id = $1 AND media_id = $2
+	`
+
+	userMedia := &models.UserMedia{}
+	err := r.db.QueryRow(query, userID, mediaID).Scan(
+		&userMedia.ID, &userMedia.UserID, &userMedia.MediaID, &userMedia.Status,
+		&userMedia.Progress, &userMedia.Rating, &userMedia.Notes,
+		&userMedia.CreatedAt, &userMedia.UpdatedAt,
+	)
+	return userMedia, err
+
+}
+
+func (r *UserMediaRepository) GetByUser(userID string, status models.Status) ([]models.UserMedia, error) {
+	query := `
+	SELECT id, user_id, media_id, status, progress, rating, notes, created_at, updated_at
+	FROM user_media
+	WHERE user_id = $1
+	`
+
+	args := []interface{}{userID}
+	if status != "" {
+		query += " AND status = $2"
+		args = append(args, status)
+	}
+
+	query += " ORDER BY updated_at DESC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var userMediaList []models.UserMedia
+	for rows.Next() {
+		var newUserMedia models.UserMedia
+		err := rows.Scan(&newUserMedia.ID, &newUserMedia.UserID, &newUserMedia.MediaID, &newUserMedia.Status, &newUserMedia.Progress, &newUserMedia.Rating, &newUserMedia.Notes, &newUserMedia.CreatedAt, &newUserMedia.UpdatedAt)
+
+		if err != nil {
+			return nil, err
+		}
+		userMediaList = append(userMediaList, newUserMedia)
+	}
+	return userMediaList, nil
+}
+
+// TODO: Get Discord Bot Tokens and Creeate another Telegram Bot
+// Seeding not really enough for it...
+// TODO: adapt some logic to handle duplicate entries
