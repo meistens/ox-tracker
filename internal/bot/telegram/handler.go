@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mtracker/internal/models"
 	"mtracker/internal/service"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -137,4 +139,37 @@ func (t *TelegramHandler) handleUpdate(update Update) {
 	if message.Chat.Type == "private" {
 		t.handlePlaintext(message)
 	}
+}
+
+func (t *TelegramHandler) handleCommand(message Message) {
+	text := strings.TrimPrefix(message.Text, t.prefix)
+	parts := strings.Fields(text)
+
+	if len(parts) == 0 {
+		return
+	}
+
+	command := strings.ToLower(parts[0])
+	args := parts[1:]
+
+	// handle help and start commands locally
+	if command == "help" || command == "start" {
+		// TODO: sendHelpMessage
+		t.sendHelpMessage(message.Chat.ID)
+		return
+	}
+
+	// create bot command
+	botCmd := &models.BotCommand{
+		Command: command,
+		Args:    args,
+		UserID:  strconv.Itoa(message.From.ID),
+	}
+
+	// handle command through media tracker
+	response := t.mediaTracker.HandleBotCommand(botCmd)
+
+	// send response
+	// TODO: sendResponse
+	t.sendResponse(message.Chat.ID, response, command)
 }
