@@ -187,6 +187,118 @@ func (r *UserMediaRepository) GetByUser(userID string, status models.Status) ([]
 	return userMediaList, nil
 }
 
+func (r *UserMediaRepository) Delete(userID string, mediaID int) error {
+	query := `
+	DELETE FROM user_media
+	WHERE user_id = $1 AND media_id = $2
+	`
+
+	_, err := r.db.Exec(query, userID, mediaID)
+	return err
+}
+
+// Reminders handles reminder-related ops
+type ReminderRepository struct {
+	db *DB
+}
+
+func NewReminderRepository(db *DB) *ReminderRepository {
+	return &ReminderRepository{db: db}
+}
+
+func (r *ReminderRepository) CreateReminder(reminder *models.Reminder) error {
+	query := `
+	INSERT INTO reminders (user_id, media_id, message, remind_at)
+	VALUES ($1, $2, $3, $4)
+	RETURNING id, created_at
+	`
+
+	err := r.db.QueryRow(query, reminder.UserID, reminder.MediaID,
+		reminder.Message, reminder.RemindAt).
+		Scan(&reminder.ID, &reminder.CreatedAt)
+
+	return err
+}
+
+func (r *ReminderRepository) GetPendingReminders() ([]models.Reminder, error) {
+	query := `
+	SELECT id, user_id, media_id, message, remind_at, sent, created_at
+	FROM reminders
+	WHERE sent = FALSE AND remind_at <= CURRENT_TIMESTAMP
+	`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reminders []models.Reminder
+	for rows.Next() {
+		var newReminders models.Reminder
+		err := rows.Scan(&newReminders.ID, &newReminders.UserID, &newReminders.MediaID, &newReminders.Message,
+			&newReminders.RemindAt, &newReminders.Sent, &newReminders.CreatedAt)
+
+		if err != nil {
+			return nil, err
+		}
+		reminders = append(reminders, newReminders)
+	}
+
+	return reminders, nil
+}
+
+func (r *ReminderRepository) GetRemindersByUser(userID string) ([]models.Reminder, error) {
+	query := `
+	SELECT id, user_id, media_id, message, remind_at, sent, created_at
+	FROM reminders
+	WHERE user_id = $1
+	ORDER BY remind_at ASC
+	`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reminders []models.Reminder
+	for rows.Next() {
+		var reminder models.Reminder
+		err := rows.Scan(&reminder.ID, &reminder.UserID, &reminder.MediaID, &reminder.Message,
+			&reminder.RemindAt, &reminder.Sent, &reminder.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		reminders = append(reminders, reminder)
+	}
+
+	return reminders, nil
+}
+
+func (r *ReminderRepository) MarkReminderAsSent(reminderID int) error {
+	query := `UPDATE reminders SET sent = TRUE WHERE id = $1`
+	_, err := r.db.Exec(query, reminderID)
+	return err
+}
+
+// Repositories struct combines all repos
+type Repositories struct {
+	User      *UserRepository
+	Media     *MediaRepository
+	UserMedia *UserMediaRepository
+	Reminder  *ReminderRepository
+}
+
+func NewRepositories(db *DB) *Repositories {
+	return &Repositories{
+		User:      NewUserRepository(db),
+		Media:     NewMediaRepository(db),
+		UserMedia: NewUserMediaRepository(db),
+		Reminder:  NewReminderRepository(db),
+	}
+}
+
 // TODO: Get Discord Bot Tokens and Creeate another Telegram Bot
 // Seeding not really enough for it...
 // TODO: adapt some logic to handle duplicate entries
