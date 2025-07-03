@@ -173,3 +173,32 @@ func (t *TelegramHandler) handleCommand(message Message) {
 	// TODO: sendResponse
 	t.sendResponse(message.Chat.ID, response, command)
 }
+
+// handlePlaintext
+func (t *TelegramHandler) handlePlaintext(message Message) {
+	// TODO: inline search in place of cmd suggestions
+	text := "use commands to interact with the bt\n\nType /help to see available commands"
+	// TODO: sendMessage
+	t.sendMessage(message.Chat.ID, text, "Markdown")
+}
+
+// sendResponse
+func (t *TelegramHandler) sendResponse(chatID int64, response *models.BotResponse, command string) {
+	var emoji string
+	var text strings.Builder
+
+	if response.Success {
+		// getCommandTitle
+		text.WriteString(fmt.Sprintf("%s *%s*\n\n", emoji, t.getCommandTitle(command)))
+	} else {
+		emoji = "⏰"
+		text.WriteString(fmt.Sprintf("%s *Error*\n\n", emoji))
+	}
+
+	// format response message
+	// TODO: formatResponseMessage
+	responseText := t.formatResponseText(response.Message, command)
+	text.WriteString(responseText)
+
+	t.sendMessage(chatID, text.String(), "Markdown")
+}
