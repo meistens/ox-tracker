@@ -335,3 +335,26 @@ func (t *TelegramHandler) sendMessage(chatID int64, text, parseMode string) erro
 }
 
 // All TODOs done!
+//
+// SendMessage implements BotIntegration interface
+func (t *TelegramHandler) SendMessage(userID, message string) error {
+	chatID, err := strconv.ParseInt(userID, 10, 64)
+
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	return t.sendMessage(chatID, message, "")
+}
+
+// SendReminder sends formatted reminder message
+func (t *TelegramHandler) SendReminder(userID, mediaTitle, message string) error {
+	chatID, err := strconv.ParseInt(userID, 10, 64)
+
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	reminderText := fmt.Sprintf("⏰ *Reminder*\n\n*%s*\n\n%s", mediaTitle, message)
+	return t.sendMessage(chatID, reminderText, "Markdown")
+}
