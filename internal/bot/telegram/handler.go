@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -293,4 +294,42 @@ func (t *TelegramHandler) getCommandTitle(command string) string {
 	default:
 		return "Success"
 	}
+}
+
+// sendHelpMessage
+func (t *TelegramHandler) sendHelpMessage(chatID int64) {
+	helpText := `help text here, it is a work in progress so...`
+
+	t.sendMessage(chatID, helpText, "Markdown")
+}
+
+// sendMessage
+func (t *TelegramHandler) sendMessage(chatID int64, text, parseMode string) error {
+	request := SendMessageRequest{
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: parseMode,
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	// URL for sendMessage
+	// TODO: check current docs to make changes
+	url := fmt.Sprintf("%s/sendMessage", t.baseURL)
+	resp, err := t.httpClient.Post(url, "application/json", bytes.NewBuffer(jsonData))
+
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API error: %s", string(body))
+	}
+
+	return nil
 }
