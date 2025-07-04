@@ -96,3 +96,46 @@ func (s *MediaService) SearchMedia(query string, mediaType models.MediaType) (in
 		return nil, fmt.Errorf("unsupported media type: %s", mediaType)
 	}
 }
+
+func (s *MediaService) AddMediaToUser(userID, extID, title string, mediaType models.MediaType) (*models.Media, error) {
+	existingMedia, err := s.repositories.Media.GetByExtID(extID)
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+
+	var media *models.Media
+	if existingMedia != nil {
+		media = existingMedia
+	} else {
+		// create new media
+		media = &models.Media{
+			ExternalID: extID,
+			Title:      title,
+			Type:       mediaType,
+		}
+
+		inserted, err := s.repositories.Media.CreateMedia(media)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create media: %w", err)
+		}
+		if !inserted {
+			// Media already exists, get the existing record
+			existingMedia, err := s.repositories.Media.GetByExtID(extID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get existing media: %w", err)
+			}
+			media = existingMedia
+		}
+	}
+	// add to user's list
+	userMedia := &models.UserMedia{
+		UserID:  userID,
+		MediaID: media.ID,
+		Status:  models.StatusWatchlist,
+	}
+
+	if err := s.repositories.UserMedia.InsertUserMedia(userMedia); err != nil {
+		return nil, fmt.Errorf("failed to add user list: %w", err)
+	}
+	return media, nil
+}
