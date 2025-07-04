@@ -39,6 +39,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleStatus(cmd)
 	case "rate":
 		return h.handleRate(cmd)
+	case "progress":
+		return h.handleProgress(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -433,6 +435,86 @@ func (h *CommandHandler) handleRate(cmd *models.BotCommand) *models.BotResponse 
 
 	return &models.BotResponse{
 		Message: fmt.Sprintf("Rated '%s' with %.1f/10 stars!", media.Title, rating),
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) handleProgress(cmd *models.BotCommand) *models.BotResponse {
+	if len(cmd.Args) < 2 {
+		return &models.BotResponse{
+			Message: "Usage: /progress <media_id> <episode_number>\nExample: /progress 1 5\nUse 0 to reset progress",
+			Success: false,
+		}
+	}
+
+	// Parse media ID
+	var mediaID int
+	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid media ID. Please provide a numeric ID.",
+			Success: false,
+		}
+	}
+
+	// Parse progress
+	var progress int
+	if _, err := fmt.Sscanf(cmd.Args[1], "%d", &progress); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid progress. Please provide a number (episode number).",
+			Success: false,
+		}
+	}
+
+	// Validate progress range
+	if progress < 0 {
+		return &models.BotResponse{
+			Message: "Progress cannot be negative. Use 0 to reset progress.",
+			Success: false,
+		}
+	}
+
+	// Ensure user exists
+	user := &models.User{
+		ID:       cmd.UserID,
+		Username: "user",
+		Platform: "telegram",
+	}
+	err := h.userRepo.CreateUser(user)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error creating user: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Check if media exists
+	media, err := h.mediaRepo.GetByID(mediaID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Media not found with that ID. Use /search to find valid media IDs.",
+			Success: false,
+		}
+	}
+
+	// Update progress using service method
+	err = h.mediaService.UpdateProgress(cmd.UserID, mediaID, progress)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error updating progress: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Determine status message based on progress
+	var statusMsg string
+	if progress == 0 {
+		statusMsg = "Reset progress"
+	} else {
+		statusMsg = fmt.Sprintf("Updated progress to episode %d", progress)
+	}
+
+	return &models.BotResponse{
+		Message: fmt.Sprintf("%s for '%s'!", statusMsg, media.Title),
 		Success: true,
 	}
 }
