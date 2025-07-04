@@ -37,6 +37,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleAdd(cmd)
 	case "status":
 		return h.handleStatus(cmd)
+	case "rate":
+		return h.handleRate(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -359,6 +361,78 @@ func (h *CommandHandler) handleStatus(cmd *models.BotCommand) *models.BotRespons
 
 	return &models.BotResponse{
 		Message: fmt.Sprintf("Updated status for '%s' to %s!", media.Title, statusStr),
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) handleRate(cmd *models.BotCommand) *models.BotResponse {
+	if len(cmd.Args) < 2 {
+		return &models.BotResponse{
+			Message: "Usage: /rate <media_id> <rating>\nExample: /rate 1 8.5\nRating should be between 0.0 and 10.0",
+			Success: false,
+		}
+	}
+
+	// Parse media ID
+	var mediaID int
+	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid media ID. Please provide a numeric ID.",
+			Success: false,
+		}
+	}
+
+	// Parse rating
+	var rating float64
+	if _, err := fmt.Sscanf(cmd.Args[1], "%f", &rating); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid rating. Please provide a number between 0.0 and 10.0.",
+			Success: false,
+		}
+	}
+
+	// Validate rating range
+	if rating < 0.0 || rating > 10.0 {
+		return &models.BotResponse{
+			Message: "Rating must be between 0.0 and 10.0.",
+			Success: false,
+		}
+	}
+
+	// Ensure user exists
+	user := &models.User{
+		ID:       cmd.UserID,
+		Username: "user",
+		Platform: "telegram",
+	}
+	err := h.userRepo.CreateUser(user)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error creating user: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Check if media exists
+	media, err := h.mediaRepo.GetByID(mediaID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Media not found with that ID. Use /search to find valid media IDs.",
+			Success: false,
+		}
+	}
+
+	// Rate media using service method
+	err = h.mediaService.RateMedia(cmd.UserID, mediaID, rating)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error rating media: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	return &models.BotResponse{
+		Message: fmt.Sprintf("Rated '%s' with %.1f/10 stars!", media.Title, rating),
 		Success: true,
 	}
 }
