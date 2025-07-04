@@ -54,7 +54,10 @@ func main() {
 	mux.HandleFunc("/v1/health", app.healthCheckHandler)
 
 	// Initialize command handler and telegram handler
-	cmdHandler := commands.NewCommandHandler()
+	mediaRepo := db.NewMediaRepository(database)
+	userMediaRepo := db.NewUserMediaRepository(database)
+	userRepo := db.NewUserRepository(database)
+	cmdHandler := commands.NewCommandHandler(mediaRepo, userMediaRepo, userRepo)
 	tgHandler := telegram.NewTelegramHandler(cfg.BotTokens.TelegramToken, cmdHandler)
 
 	// --- Telegram Bot Startup (polling mode for local development) ---

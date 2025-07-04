@@ -110,6 +110,38 @@ func (r *MediaRepository) GetByID(id int) (*models.Media, error) {
 	return media, nil
 }
 
+func (r *MediaRepository) SearchMedia(mediaType string, query string, limit int) ([]models.Media, error) {
+	sqlQuery := `
+	SELECT id, external_id, title, type, description, release_date, poster_url, rating, created_at
+	FROM media
+	WHERE type = $1 AND title ILIKE $2
+	ORDER BY rating DESC, title ASC
+	LIMIT $3
+	`
+
+	rows, err := r.db.Query(sqlQuery, mediaType, "%"+query+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var mediaList []models.Media
+	for rows.Next() {
+		var media models.Media
+		err := rows.Scan(
+			&media.ID, &media.ExternalID, &media.Title, &media.Type,
+			&media.Description, &media.ReleaseDate, &media.PosterURL,
+			&media.Rating, &media.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		mediaList = append(mediaList, media)
+	}
+
+	return mediaList, nil
+}
+
 // UserMedia handles media tracking-related ops
 type UserMediaRepository struct {
 	db *DB
