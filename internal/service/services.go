@@ -187,6 +187,34 @@ func (s *MediaService) UpdateProgress(userID string, mediaID int, progress model
 	return s.repositories.UserMedia.InsertUserMedia(userMedia)
 }
 
+func (s *MediaService) CreateReminder(userID string, mediaID int, message string, remindAt time.Time) (*models.Reminder, error) {
+	// Check if media exists
+	_, err := s.repositories.Media.GetByID(mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("media not found: %w", err)
+	}
+
+	// Create reminder
+	reminder := &models.Reminder{
+		UserID:   userID,
+		MediaID:  mediaID,
+		Message:  message,
+		RemindAt: remindAt,
+		Sent:     false,
+	}
+
+	err = s.repositories.Reminder.CreateReminder(reminder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reminder: %w", err)
+	}
+
+	return reminder, nil
+}
+
+func (s *MediaService) GetUserReminders(userID string) ([]models.Reminder, error) {
+	return s.repositories.Reminder.GetRemindersByUser(userID)
+}
+
 func (s *MediaService) GetUserMediaList(userID string, status models.Status) ([]models.UserMediaWithDetails, error) {
 	userMediaList, err := s.repositories.UserMedia.GetByUser(userID, status)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // CommandHandler implements service.MediaTracker
@@ -45,6 +46,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleProgress(cmd)
 	case "getlist":
 		return h.handleGetList(cmd)
+	case "remind":
+		return h.handleRemind(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -543,6 +546,156 @@ func (h *CommandHandler) handleGetList(cmd *models.BotCommand) *models.BotRespon
 	}
 }
 
+func (h *CommandHandler) handleRemind(cmd *models.BotCommand) *models.BotResponse {
+	if len(cmd.Args) == 0 {
+		// List reminders
+		return h.listReminders(cmd)
+	}
+
+	if len(cmd.Args) < 3 {
+		return &models.BotResponse{
+			Message: "Usage: /remind <media_id> <time> <message>\nExamples:\n  /remind 1 2h Continue watching\n  /remind 1 1d Watch next episode\n  /remind 1 30m Take a break\n  /remind (to list your reminders)",
+			Success: false,
+		}
+	}
+
+	// Parse media ID
+	var mediaID int
+	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid media ID. Please provide a numeric ID.",
+			Success: false,
+		}
+	}
+
+	// Parse time duration
+	durationStr := cmd.Args[1]
+	remindAt, err := h.parseReminderTime(durationStr)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Invalid time format. Examples: 30m, 2h, 1d, 1w",
+			Success: false,
+		}
+	}
+
+	// Get message
+	message := strings.Join(cmd.Args[2:], " ")
+	if message == "" {
+		message = "Time to continue watching!"
+	}
+
+	// Ensure user exists
+	user := &models.User{
+		ID:       cmd.UserID,
+		Username: "user",
+		Platform: "telegram",
+	}
+	err = h.userRepo.CreateUser(user)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error creating user: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Check if media exists
+	media, err := h.mediaRepo.GetByID(mediaID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Media not found with that ID. Use /search to find valid media IDs.",
+			Success: false,
+		}
+	}
+
+	// Create reminder using service method
+	reminder, err := h.mediaService.CreateReminder(cmd.UserID, mediaID, message, remindAt)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error creating reminder: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Format reminder time for display
+	timeUntil := time.Until(remindAt)
+	var timeStr string
+	if timeUntil.Hours() >= 24 {
+		days := int(timeUntil.Hours() / 24)
+		timeStr = fmt.Sprintf("%d day(s)", days)
+	} else if timeUntil.Hours() >= 1 {
+		hours := int(timeUntil.Hours())
+		timeStr = fmt.Sprintf("%d hour(s)", hours)
+	} else {
+		minutes := int(timeUntil.Minutes())
+		timeStr = fmt.Sprintf("%d minute(s)", minutes)
+	}
+
+	return &models.BotResponse{
+		Message: fmt.Sprintf("Reminder set for '%s' in %s!\nMessage: %s", media.Title, timeStr, reminder.Message),
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) listReminders(cmd *models.BotCommand) *models.BotResponse {
+	// Get user's reminders
+	reminders, err := h.mediaService.GetUserReminders(cmd.UserID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error fetching reminders: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	if len(reminders) == 0 {
+		return &models.BotResponse{
+			Message: "You have no reminders set.",
+			Success: true,
+		}
+	}
+
+	// Format reminders list
+	var response strings.Builder
+	response.WriteString("Your Reminders:\n\n")
+
+	for i, reminder := range reminders {
+		// Get media details
+		media, err := h.mediaRepo.GetByID(reminder.MediaID)
+		if err != nil {
+			continue // Skip if media not found
+		}
+
+		response.WriteString(fmt.Sprintf("%d. %s\n", i+1, media.Title))
+		response.WriteString(fmt.Sprintf("   Message: %s\n", reminder.Message))
+
+		// Format reminder time
+		if reminder.Sent {
+			response.WriteString("   Status: Sent\n")
+		} else {
+			timeUntil := time.Until(reminder.RemindAt)
+			if timeUntil > 0 {
+				if timeUntil.Hours() >= 24 {
+					days := int(timeUntil.Hours() / 24)
+					response.WriteString(fmt.Sprintf("   Reminds in: %d day(s)\n", days))
+				} else if timeUntil.Hours() >= 1 {
+					hours := int(timeUntil.Hours())
+					response.WriteString(fmt.Sprintf("   Reminds in: %d hour(s)\n", hours))
+				} else {
+					minutes := int(timeUntil.Minutes())
+					response.WriteString(fmt.Sprintf("   Reminds in: %d minute(s)\n", minutes))
+				}
+			} else {
+				response.WriteString("   Status: Overdue\n")
+			}
+		}
+		response.WriteString("\n")
+	}
+
+	return &models.BotResponse{
+		Message: response.String(),
+		Success: true,
+	}
+}
+
 // parseProgress parses different progress formats and returns a Progress struct
 func parseProgress(input string, mediaType models.MediaType) (*models.Progress, error) {
 	input = strings.TrimSpace(input)
@@ -737,6 +890,54 @@ func (h *CommandHandler) handleProgress(cmd *models.BotCommand) *models.BotRespo
 		Message: fmt.Sprintf("%s for '%s'!", statusMsg, media.Title),
 		Success: true,
 	}
+}
+
+// parseReminderTime parses time duration strings like "30m", "2h", "1d", "1w"
+func (h *CommandHandler) parseReminderTime(durationStr string) (time.Time, error) {
+	// Remove any whitespace
+	durationStr = strings.TrimSpace(durationStr)
+
+	// Parse duration with unit
+	var duration time.Duration
+
+	switch {
+	case strings.HasSuffix(durationStr, "m"):
+		minutes, err := strconv.Atoi(strings.TrimSuffix(durationStr, "m"))
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid minutes format")
+		}
+		duration = time.Duration(minutes) * time.Minute
+
+	case strings.HasSuffix(durationStr, "h"):
+		hours, err := strconv.Atoi(strings.TrimSuffix(durationStr, "h"))
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid hours format")
+		}
+		duration = time.Duration(hours) * time.Hour
+
+	case strings.HasSuffix(durationStr, "d"):
+		days, err := strconv.Atoi(strings.TrimSuffix(durationStr, "d"))
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid days format")
+		}
+		duration = time.Duration(days) * 24 * time.Hour
+
+	case strings.HasSuffix(durationStr, "w"):
+		weeks, err := strconv.Atoi(strings.TrimSuffix(durationStr, "w"))
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid weeks format")
+		}
+		duration = time.Duration(weeks) * 7 * 24 * time.Hour
+
+	default:
+		return time.Time{}, fmt.Errorf("invalid time format, use: 30m, 2h, 1d, 1w")
+	}
+
+	if duration <= 0 {
+		return time.Time{}, fmt.Errorf("duration must be positive")
+	}
+
+	return time.Now().Add(duration), nil
 }
 
 // Ensure CommandHandler implements the interface
