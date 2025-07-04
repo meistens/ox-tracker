@@ -237,6 +237,41 @@ func (s *MediaService) DeleteMediaFromUser(userID string, mediaID int) (*models.
 	return media, nil
 }
 
+func (s *MediaService) UpdateUserMediaNotes(userID string, mediaID int, notes string) (*models.UserMedia, error) {
+	// Check if media exists
+	_, err := s.repositories.Media.GetByID(mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("media not found: %w", err)
+	}
+
+	// Get existing user-media relationship or create new one
+	userMedia, err := s.repositories.UserMedia.GetByUserAndMedia(userID, mediaID)
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+
+	if userMedia == nil {
+		// Create new user-media relationship with notes
+		userMedia = &models.UserMedia{
+			UserID:  userID,
+			MediaID: mediaID,
+			Status:  models.StatusWatchlist,
+			Notes:   notes,
+		}
+	} else {
+		// Update existing notes
+		userMedia.Notes = notes
+	}
+
+	// Save to database
+	err = s.repositories.UserMedia.InsertUserMedia(userMedia)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update notes: %w", err)
+	}
+
+	return userMedia, nil
+}
+
 func (s *MediaService) GetUserMediaList(userID string, status models.Status) ([]models.UserMediaWithDetails, error) {
 	userMediaList, err := s.repositories.UserMedia.GetByUser(userID, status)
 	if err != nil {

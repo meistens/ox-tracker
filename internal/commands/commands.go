@@ -50,6 +50,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleRemind(cmd)
 	case "delete":
 		return h.handleDelete(cmd)
+	case "notes":
+		return h.handleNotes(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -726,6 +728,72 @@ func (h *CommandHandler) handleDelete(cmd *models.BotCommand) *models.BotRespons
 
 	return &models.BotResponse{
 		Message: fmt.Sprintf("Removed '%s' from your list!", media.Title),
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) handleNotes(cmd *models.BotCommand) *models.BotResponse {
+	if len(cmd.Args) < 2 {
+		return &models.BotResponse{
+			Message: "Usage: /notes <media_id> <note_text>\nExamples:\n  /notes 1 Great series, highly recommend!\n  /notes 1 Watch with friends\n  /notes 1 (to clear notes)",
+			Success: false,
+		}
+	}
+
+	// Parse media ID
+	var mediaID int
+	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid media ID. Please provide a numeric ID.",
+			Success: false,
+		}
+	}
+
+	// Get note text (all remaining arguments)
+	noteText := strings.Join(cmd.Args[1:], " ")
+
+	// Ensure user exists
+	user := &models.User{
+		ID:       cmd.UserID,
+		Username: "user",
+		Platform: "telegram",
+	}
+	err := h.userRepo.CreateUser(user)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error creating user: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Check if media exists
+	media, err := h.mediaRepo.GetByID(mediaID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Media not found with that ID. Use /search to find valid media IDs.",
+			Success: false,
+		}
+	}
+
+	// Update notes using service method
+	_, err = h.mediaService.UpdateUserMediaNotes(cmd.UserID, mediaID, noteText)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error updating notes: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Create response message
+	var responseMsg string
+	if noteText == "" {
+		responseMsg = fmt.Sprintf("Cleared notes for '%s'", media.Title)
+	} else {
+		responseMsg = fmt.Sprintf("Updated notes for '%s': %s", media.Title, noteText)
+	}
+
+	return &models.BotResponse{
+		Message: responseMsg,
 		Success: true,
 	}
 }
