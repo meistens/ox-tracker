@@ -167,3 +167,21 @@ func (s *MediaService) RateMedia(userID string, mediaID int, rating float64) err
 	userMedia.Rating = rating
 	return s.repositories.UserMedia.InsertUserMedia(userMedia)
 }
+
+func (s *MediaService) UpdateProgress(userID string, mediaID int, progress int) error {
+	userMedia, err := s.repositories.UserMedia.GetByUserAndMedia(userID, mediaID)
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		return fmt.Errorf("database error: %w", err)
+	}
+
+	if userMedia == nil {
+		userMedia = &models.UserMedia{
+			UserID:  userID,
+			MediaID: mediaID,
+			Status:  models.StatusWatching,
+		}
+	}
+
+	userMedia.Progress = progress
+	return s.repositories.UserMedia.InsertUserMedia(userMedia)
+}
