@@ -14,14 +14,16 @@ type CommandHandler struct {
 	userMediaRepo *db.UserMediaRepository
 	userRepo      *db.UserRepository
 	apiClient     *service.APIClient
+	mediaService  *service.MediaService
 }
 
-func NewCommandHandler(mediaRepo *db.MediaRepository, userMediaRepo *db.UserMediaRepository, userRepo *db.UserRepository, apiClient *service.APIClient) *CommandHandler {
+func NewCommandHandler(mediaRepo *db.MediaRepository, userMediaRepo *db.UserMediaRepository, userRepo *db.UserRepository, apiClient *service.APIClient, mediaService *service.MediaService) *CommandHandler {
 	return &CommandHandler{
 		mediaRepo:     mediaRepo,
 		userMediaRepo: userMediaRepo,
 		userRepo:      userRepo,
 		apiClient:     apiClient,
+		mediaService:  mediaService,
 	}
 }
 
@@ -224,6 +226,20 @@ func (h *CommandHandler) handleAdd(cmd *models.BotCommand) *models.BotResponse {
 				Success: false,
 			}
 		}
+
+		// Use service method to add media to user
+		addedMedia, err := h.mediaService.AddMediaToUser(cmd.UserID, media.ExternalID, media.Title, media.Type)
+		if err != nil {
+			return &models.BotResponse{
+				Message: "Error adding media to your list: " + err.Error(),
+				Success: false,
+			}
+		}
+
+		return &models.BotResponse{
+			Message: fmt.Sprintf("Added '%s' to your watchlist!", addedMedia.Title),
+			Success: true,
+		}
 	} else {
 		// It's a name, search for it across all types
 		query := strings.Join(cmd.Args, " ")
@@ -251,40 +267,19 @@ func (h *CommandHandler) handleAdd(cmd *models.BotCommand) *models.BotResponse {
 			}
 		}
 
-		media = bestMatch
-		mediaID = media.ID
-	}
+		// Use service method to add media to user
+		addedMedia, err := h.mediaService.AddMediaToUser(cmd.UserID, bestMatch.ExternalID, bestMatch.Title, bestMatch.Type)
+		if err != nil {
+			return &models.BotResponse{
+				Message: "Error adding media to your list: " + err.Error(),
+				Success: false,
+			}
+		}
 
-	// Check if already in user's list
-	existing, err := h.userMediaRepo.GetByUserAndMedia(cmd.UserID, mediaID)
-	if err == nil && existing != nil {
 		return &models.BotResponse{
-			Message: fmt.Sprintf("'%s' is already in your list!", media.Title),
+			Message: fmt.Sprintf("Added '%s' to your watchlist!", addedMedia.Title),
 			Success: true,
 		}
-	}
-
-	// Add to user's list
-	userMedia := &models.UserMedia{
-		UserID:   cmd.UserID,
-		MediaID:  mediaID,
-		Status:   models.StatusWatchlist,
-		Progress: 0,
-		Rating:   0,
-		Notes:    "",
-	}
-
-	err = h.userMediaRepo.InsertUserMedia(userMedia)
-	if err != nil {
-		return &models.BotResponse{
-			Message: "Error adding media to your list: " + err.Error(),
-			Success: false,
-		}
-	}
-
-	return &models.BotResponse{
-		Message: fmt.Sprintf("Added '%s' to your watchlist!", media.Title),
-		Success: true,
 	}
 }
 

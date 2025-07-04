@@ -62,7 +62,11 @@ func main() {
 	// Create API client for external searches
 	apiClient := service.NewAPIClient(cfg.APIKeys.TMDBKey)
 
-	cmdHandler := commands.NewCommandHandler(mediaRepo, userMediaRepo, userRepo, apiClient)
+	// Create repositories and media service
+	repos := db.NewRepositories(database)
+	mediaService := service.NewMediaService(repos, apiClient)
+
+	cmdHandler := commands.NewCommandHandler(mediaRepo, userMediaRepo, userRepo, apiClient, mediaService)
 	tgHandler := telegram.NewTelegramHandler(cfg.BotTokens.TelegramToken, cmdHandler)
 
 	// --- Telegram Bot Startup (polling mode for local development) ---
