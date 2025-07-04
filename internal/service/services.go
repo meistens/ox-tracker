@@ -215,6 +215,28 @@ func (s *MediaService) GetUserReminders(userID string) ([]models.Reminder, error
 	return s.repositories.Reminder.GetRemindersByUser(userID)
 }
 
+func (s *MediaService) DeleteMediaFromUser(userID string, mediaID int) (*models.Media, error) {
+	// Check if media exists
+	media, err := s.repositories.Media.GetByID(mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("media not found: %w", err)
+	}
+
+	// Check if user has this media in their list
+	_, err = s.repositories.UserMedia.GetByUserAndMedia(userID, mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("media not in user's list: %w", err)
+	}
+
+	// Delete from user's list
+	err = s.repositories.UserMedia.Delete(userID, mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete from user's list: %w", err)
+	}
+
+	return media, nil
+}
+
 func (s *MediaService) GetUserMediaList(userID string, status models.Status) ([]models.UserMediaWithDetails, error) {
 	userMediaList, err := s.repositories.UserMedia.GetByUser(userID, status)
 	if err != nil {

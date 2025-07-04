@@ -48,6 +48,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleGetList(cmd)
 	case "remind":
 		return h.handleRemind(cmd)
+	case "delete":
+		return h.handleDelete(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -692,6 +694,38 @@ func (h *CommandHandler) listReminders(cmd *models.BotCommand) *models.BotRespon
 
 	return &models.BotResponse{
 		Message: response.String(),
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) handleDelete(cmd *models.BotCommand) *models.BotResponse {
+	if len(cmd.Args) < 1 {
+		return &models.BotResponse{
+			Message: "Usage: /delete <media_id>\nExample: /delete 1",
+			Success: false,
+		}
+	}
+
+	// Parse media ID
+	var mediaID int
+	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid media ID. Please provide a numeric ID.",
+			Success: false,
+		}
+	}
+
+	// Delete media from user's list using service method
+	media, err := h.mediaService.DeleteMediaFromUser(cmd.UserID, mediaID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error removing media from your list: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	return &models.BotResponse{
+		Message: fmt.Sprintf("Removed '%s' from your list!", media.Title),
 		Success: true,
 	}
 }
