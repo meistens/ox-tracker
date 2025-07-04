@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"mtracker/internal/db"
 	"mtracker/internal/models"
 	"net/http"
@@ -184,4 +185,28 @@ func (s *MediaService) UpdateProgress(userID string, mediaID int, progress model
 
 	userMedia.Progress = progress
 	return s.repositories.UserMedia.InsertUserMedia(userMedia)
+}
+
+func (s *MediaService) GetUserMediaList(userID string, status models.Status) ([]models.UserMediaWithDetails, error) {
+	userMediaList, err := s.repositories.UserMedia.GetByUser(userID, status)
+	if err != nil {
+		return nil, err
+	}
+
+	var detailedList []models.UserMediaWithDetails
+
+	for _, userMedia := range userMediaList {
+		media, err := s.repositories.Media.GetByID(userMedia.MediaID)
+		if err != nil {
+			log.Printf("faild to get media details for ID %d: %v", userMedia.MediaID, err)
+			continue
+		}
+
+		detailedList = append(detailedList, models.UserMediaWithDetails{
+			UserMedia: userMedia,
+			Media:     *media,
+		})
+	}
+
+	return detailedList, nil
 }
