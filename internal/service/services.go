@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"mtracker/internal/db"
 	"mtracker/internal/models"
 	"net/http"
 	"time"
@@ -55,6 +56,7 @@ func (t *APIClient) SearchTMDB(query string, mediaType models.MediaType) ([]mode
 	return searchResp.Results, nil
 }
 
+// Jikan API SearchAnime
 func (t *APIClient) SearchAnime(query string) ([]models.JikanAnime, error) {
 	url := fmt.Sprintf("https://api.jikan.moe/v4/anime?q=%s&limit=10", query)
 
@@ -70,4 +72,27 @@ func (t *APIClient) SearchAnime(query string) ([]models.JikanAnime, error) {
 	}
 
 	return searchResp.Data, nil
+}
+
+// MedisService handles media-related logic
+type MediaService struct {
+	repositories *db.Repositories
+	apiClient    *APIClient
+}
+
+func NewMediaService(repos *db.Repositories, apiClient *APIClient) *MediaService {
+	return &MediaService{
+		repositories: repos,
+		apiClient:    apiClient,
+	}
+}
+
+// TODO: add TMDB/replacement and find an OpenLibrary alternative
+func (s *MediaService) SearchMedia(query string, mediaType models.MediaType) (interface{}, error) {
+	switch mediaType {
+	case models.MediaTypeAnime:
+		return s.apiClient.SearchAnime(query)
+	default:
+		return nil, fmt.Errorf("unsupported media type: %s", mediaType)
+	}
 }
