@@ -228,13 +228,13 @@ func (t *TelegramHandler) handlePlaintext(message Message) {
 
 // sendResponse
 func (t *TelegramHandler) sendResponse(chatID int64, response *models.BotResponse, command string) {
-	var emoji string
 	var text strings.Builder
 
 	if response.Success {
+		emoji := t.getCommandEmoji(command)
 		text.WriteString(fmt.Sprintf("%s *%s*\n\n", emoji, t.getCommandTitle(command)))
 	} else {
-		emoji = "⏰"
+		emoji := "⏰"
 		text.WriteString(fmt.Sprintf("%s *Error*\n\n", emoji))
 	}
 
