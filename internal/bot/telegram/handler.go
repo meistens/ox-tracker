@@ -73,16 +73,65 @@ func NewTelegramHandler(token string, mediaTracker service.MediaTracker) *Telegr
 	return &TelegramHandler{
 		token:        token,
 		mediaTracker: mediaTracker,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		httpClient:   &http.Client{Timeout: 60 * time.Second}, // Increased timeout
 		baseURL:      fmt.Sprintf("https://api.telegram.org/bot%s", token),
 		prefix:       "/",
 	}
 }
 
 func (t *TelegramHandler) Start() error {
-	// TODO: set webhook or start polling
-	log.Println("Telegram bot is now running")
-	return nil
+	log.Println("Starting Telegram bot in polling mode...")
+
+	// Initialize offset for updates
+	offset := 0
+
+	for {
+		// Get updates from Telegram API with shorter timeout
+		url := fmt.Sprintf("%s/getUpdates?offset=%d&timeout=10", t.baseURL, offset)
+		resp, err := t.httpClient.Get(url)
+		if err != nil {
+			log.Printf("Failed to get updates: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("Telegram API error: %d", resp.StatusCode)
+			resp.Body.Close()
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		var result struct {
+			OK     bool     `json:"ok"`
+			Result []Update `json:"result"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			log.Printf("Failed to decode response: %v", err)
+			resp.Body.Close()
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		resp.Body.Close()
+
+		if !result.OK {
+			log.Printf("Telegram API returned error")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		// Process updates
+		for _, update := range result.Result {
+			if update.UpdateID >= offset {
+				offset = update.UpdateID + 1
+			}
+			t.handleUpdate(update)
+		}
+
+		// Small delay to prevent hammering the API
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func (t *TelegramHandler) Stop() error {
@@ -129,14 +178,12 @@ func (t *TelegramHandler) handleUpdate(update Update) {
 	}
 
 	// handle commands
-	// TODO: handleCommand function
 	if strings.HasPrefix(message.Text, t.prefix) {
 		t.handleCommand(message)
 		return
 	}
 
 	// handle plaintext
-	// TODO: handlePlaintext function
 	if message.Chat.Type == "private" {
 		t.handlePlaintext(message)
 	}
@@ -155,7 +202,6 @@ func (t *TelegramHandler) handleCommand(message Message) {
 
 	// handle help and start commands locally
 	if command == "help" || command == "start" {
-		// TODO: sendHelpMessage
 		t.sendHelpMessage(message.Chat.ID)
 		return
 	}
@@ -171,15 +217,12 @@ func (t *TelegramHandler) handleCommand(message Message) {
 	response := t.mediaTracker.HandleBotCommand(botCmd)
 
 	// send response
-	// TODO: sendResponse
 	t.sendResponse(message.Chat.ID, response, command)
 }
 
 // handlePlaintext
 func (t *TelegramHandler) handlePlaintext(message Message) {
-	// TODO: inline search in place of cmd suggestions
 	text := "use commands to interact with the bt\n\nType /help to see available commands"
-	// TODO: sendMessage
 	t.sendMessage(message.Chat.ID, text, "Markdown")
 }
 
@@ -189,7 +232,6 @@ func (t *TelegramHandler) sendResponse(chatID int64, response *models.BotRespons
 	var text strings.Builder
 
 	if response.Success {
-		// getCommandTitle
 		text.WriteString(fmt.Sprintf("%s *%s*\n\n", emoji, t.getCommandTitle(command)))
 	} else {
 		emoji = "⏰"
@@ -197,7 +239,6 @@ func (t *TelegramHandler) sendResponse(chatID int64, response *models.BotRespons
 	}
 
 	// format response message
-	// TODO: formatResponseMessage
 	responseText := t.formatResponseText(response.Message, command)
 	text.WriteString(responseText)
 
@@ -206,7 +247,6 @@ func (t *TelegramHandler) sendResponse(chatID int64, response *models.BotRespons
 
 // formatResponseText
 func (t *TelegramHandler) formatResponseText(message, command string) string {
-	// TODO: formatSearchResults
 	switch command {
 	case "search":
 		return t.formatSearchResults(message)
