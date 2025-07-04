@@ -13,13 +13,15 @@ type CommandHandler struct {
 	mediaRepo     *db.MediaRepository
 	userMediaRepo *db.UserMediaRepository
 	userRepo      *db.UserRepository
+	apiClient     *service.APIClient
 }
 
-func NewCommandHandler(mediaRepo *db.MediaRepository, userMediaRepo *db.UserMediaRepository, userRepo *db.UserRepository) *CommandHandler {
+func NewCommandHandler(mediaRepo *db.MediaRepository, userMediaRepo *db.UserMediaRepository, userRepo *db.UserRepository, apiClient *service.APIClient) *CommandHandler {
 	return &CommandHandler{
 		mediaRepo:     mediaRepo,
 		userMediaRepo: userMediaRepo,
 		userRepo:      userRepo,
+		apiClient:     apiClient,
 	}
 }
 
@@ -50,7 +52,7 @@ func (h *CommandHandler) handleSearch(cmd *models.BotCommand) *models.BotRespons
 	mediaType := cmd.Args[0]
 	query := strings.Join(cmd.Args[1:], " ")
 
-	// Search in database
+	// First, search in database
 	results, err := h.mediaRepo.SearchMedia(mediaType, query, 5)
 	if err != nil {
 		return &models.BotResponse{
@@ -59,11 +61,16 @@ func (h *CommandHandler) handleSearch(cmd *models.BotCommand) *models.BotRespons
 		}
 	}
 
+	// If no results in database, try external API
 	if len(results) == 0 {
-		return &models.BotResponse{
-			Message: fmt.Sprintf("No %s found matching '%s'", mediaType, query),
-			Success: true,
+		externalResults, err := h.searchExternalAPI(mediaType, query)
+		if err != nil {
+			return &models.BotResponse{
+				Message: fmt.Sprintf("No %s found matching '%s'", mediaType, query),
+				Success: true,
+			}
 		}
+		results = externalResults
 	}
 
 	// Format results
@@ -81,6 +88,61 @@ func (h *CommandHandler) handleSearch(cmd *models.BotCommand) *models.BotRespons
 		Message: response.String(),
 		Success: true,
 	}
+}
+
+func (h *CommandHandler) searchExternalAPI(mediaType, query string) ([]models.Media, error) {
+	switch mediaType {
+	case "anime":
+		return h.searchAnime(query)
+	default:
+		return nil, fmt.Errorf("external API not available for type: %s", mediaType)
+	}
+}
+
+func (h *CommandHandler) searchAnime(query string) ([]models.Media, error) {
+	// Search using Jikan API
+	animeResults, err := h.apiClient.SearchAnime(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert Jikan results to Media models and save to database
+	var mediaResults []models.Media
+	for _, anime := range animeResults {
+		// Create Media model from Jikan result
+		media := models.Media{
+			ExternalID:  fmt.Sprintf("mal_%d", anime.MalID),
+			Title:       anime.Title,
+			Type:        models.MediaTypeAnime,
+			Description: anime.Synopsis,
+			ReleaseDate: anime.Aired.From,
+			PosterURL:   anime.Images.JPG.ImageURL,
+			Rating:      anime.Score,
+		}
+
+		// Save to database
+		inserted, err := h.mediaRepo.CreateMedia(&media)
+		if err != nil {
+			continue // Skip if error, but continue with other results
+		}
+
+		if inserted {
+			mediaResults = append(mediaResults, media)
+		} else {
+			// If not inserted (already exists), get the existing record
+			existing, err := h.mediaRepo.GetByExtID(media.ExternalID)
+			if err == nil {
+				mediaResults = append(mediaResults, *existing)
+			}
+		}
+
+		// Limit results
+		if len(mediaResults) >= 5 {
+			break
+		}
+	}
+
+	return mediaResults, nil
 }
 
 func (h *CommandHandler) handleList(cmd *models.BotCommand) *models.BotResponse {

@@ -8,6 +8,7 @@ import (
 	"mtracker/internal/commands"
 	"mtracker/internal/config"
 	"mtracker/internal/db"
+	"mtracker/internal/service"
 	"mtracker/seed"
 	"net/http"
 	"os"
@@ -57,7 +58,11 @@ func main() {
 	mediaRepo := db.NewMediaRepository(database)
 	userMediaRepo := db.NewUserMediaRepository(database)
 	userRepo := db.NewUserRepository(database)
-	cmdHandler := commands.NewCommandHandler(mediaRepo, userMediaRepo, userRepo)
+
+	// Create API client for external searches
+	apiClient := service.NewAPIClient(cfg.APIKeys.TMDBKey)
+
+	cmdHandler := commands.NewCommandHandler(mediaRepo, userMediaRepo, userRepo, apiClient)
 	tgHandler := telegram.NewTelegramHandler(cfg.BotTokens.TelegramToken, cmdHandler)
 
 	// --- Telegram Bot Startup (polling mode for local development) ---
