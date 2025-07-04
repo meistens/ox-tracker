@@ -51,11 +51,19 @@ type UserMedia struct {
 	UserID    string    `json:"user_id" db:"user_id"`
 	MediaID   int       `json:"media_id" db:"media_id"`
 	Status    Status    `json:"status" db:"status"`
-	Progress  int       `json:"progress" db:"progress"`
+	Progress  Progress  `json:"progress" db:"progress"`
 	Rating    float64   `json:"rating" db:"rating"`
 	Notes     string    `json:"notes" db:"notes"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Flexible progress tracking for different media types
+type Progress struct {
+	Current float64 `json:"current"` // Current progress value
+	Total   float64 `json:"total"`   // Total (0 = unknown)
+	Unit    string  `json:"unit"`    // "episodes", "chapters", "pages", "volumes", "percentage"
+	Details string  `json:"details"` // Additional details like "s2e5" for season 2 episode 5
 }
 
 type Reminder struct {

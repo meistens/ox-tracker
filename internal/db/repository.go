@@ -153,16 +153,17 @@ func NewUserMediaRepository(db *DB) *UserMediaRepository {
 
 func (r *UserMediaRepository) InsertUserMedia(userMedia *models.UserMedia) error {
 	query := `
-	INSERT INTO user_media (user_id, media_id, status, progress, rating, notes, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+	INSERT INTO user_media (user_id, media_id, status, progress_current, progress_total, progress_unit, progress_details, rating, notes, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
 	ON CONFLICT (user_id, media_id)
-	DO UPDATE SET status = $3, progress = $4, rating = $5, notes = $6, updated_at = CURRENT_TIMESTAMP
+	DO UPDATE SET status = $3, progress_current = $4, progress_total = $5, progress_unit = $6, progress_details = $7, rating = $8, notes = $9, updated_at = CURRENT_TIMESTAMP
 	RETURNING id, created_at
 	`
 
 	err := r.db.QueryRow(
 		query, userMedia.UserID, userMedia.MediaID, userMedia.Status,
-		userMedia.Progress, userMedia.Rating, userMedia.Notes).
+		userMedia.Progress.Current, userMedia.Progress.Total, userMedia.Progress.Unit, userMedia.Progress.Details,
+		userMedia.Rating, userMedia.Notes).
 		Scan(&userMedia.ID, &userMedia.CreatedAt)
 
 	return err
@@ -170,7 +171,7 @@ func (r *UserMediaRepository) InsertUserMedia(userMedia *models.UserMedia) error
 
 func (r *UserMediaRepository) GetByUserAndMedia(userID string, mediaID int) (*models.UserMedia, error) {
 	query := `
-	SELECT id, user_id, media_id, status, progress, rating, notes, created_at, updated_at
+	SELECT id, user_id, media_id, status, progress_current, progress_total, progress_unit, progress_details, rating, notes, created_at, updated_at
 	FROM user_media
 	WHERE user_id = $1 AND media_id = $2
 	`
@@ -178,16 +179,16 @@ func (r *UserMediaRepository) GetByUserAndMedia(userID string, mediaID int) (*mo
 	userMedia := &models.UserMedia{}
 	err := r.db.QueryRow(query, userID, mediaID).Scan(
 		&userMedia.ID, &userMedia.UserID, &userMedia.MediaID, &userMedia.Status,
-		&userMedia.Progress, &userMedia.Rating, &userMedia.Notes,
+		&userMedia.Progress.Current, &userMedia.Progress.Total, &userMedia.Progress.Unit, &userMedia.Progress.Details,
+		&userMedia.Rating, &userMedia.Notes,
 		&userMedia.CreatedAt, &userMedia.UpdatedAt,
 	)
 	return userMedia, err
-
 }
 
 func (r *UserMediaRepository) GetByUser(userID string, status models.Status) ([]models.UserMedia, error) {
 	query := `
-	SELECT id, user_id, media_id, status, progress, rating, notes, created_at, updated_at
+	SELECT id, user_id, media_id, status, progress_current, progress_total, progress_unit, progress_details, rating, notes, created_at, updated_at
 	FROM user_media
 	WHERE user_id = $1
 	`
@@ -208,13 +209,17 @@ func (r *UserMediaRepository) GetByUser(userID string, status models.Status) ([]
 
 	var userMediaList []models.UserMedia
 	for rows.Next() {
-		var newUserMedia models.UserMedia
-		err := rows.Scan(&newUserMedia.ID, &newUserMedia.UserID, &newUserMedia.MediaID, &newUserMedia.Status, &newUserMedia.Progress, &newUserMedia.Rating, &newUserMedia.Notes, &newUserMedia.CreatedAt, &newUserMedia.UpdatedAt)
-
+		var userMedia models.UserMedia
+		err := rows.Scan(
+			&userMedia.ID, &userMedia.UserID, &userMedia.MediaID, &userMedia.Status,
+			&userMedia.Progress.Current, &userMedia.Progress.Total, &userMedia.Progress.Unit, &userMedia.Progress.Details,
+			&userMedia.Rating, &userMedia.Notes,
+			&userMedia.CreatedAt, &userMedia.UpdatedAt,
+		)
 		if err != nil {
 			return nil, err
 		}
-		userMediaList = append(userMediaList, newUserMedia)
+		userMediaList = append(userMediaList, userMedia)
 	}
 	return userMediaList, nil
 }

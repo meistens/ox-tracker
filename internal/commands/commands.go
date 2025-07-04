@@ -5,6 +5,8 @@ import (
 	"mtracker/internal/db"
 	"mtracker/internal/models"
 	"mtracker/internal/service"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -184,7 +186,18 @@ func (h *CommandHandler) handleList(cmd *models.BotCommand) *models.BotResponse 
 		response.WriteString(fmt.Sprintf("%d. %s\n", i+1, media.Title))
 		response.WriteString(fmt.Sprintf("   ID: %d\n", um.MediaID))
 		response.WriteString(fmt.Sprintf("   Status: %s\n", um.Status))
-		response.WriteString(fmt.Sprintf("   Progress: %d\n", um.Progress))
+
+		// Display progress based on the new format
+		if um.Progress.Current > 0 {
+			if um.Progress.Total > 0 {
+				response.WriteString(fmt.Sprintf("   Progress: %s (%s)\n", um.Progress.Details, um.Progress.Unit))
+			} else {
+				response.WriteString(fmt.Sprintf("   Progress: %s %s\n", um.Progress.Details, um.Progress.Unit))
+			}
+		} else if um.Progress.Details == "completed" {
+			response.WriteString("   Progress: Completed\n")
+		}
+
 		if um.Rating > 0 {
 			response.WriteString(fmt.Sprintf("   Rating: %.1f/10\n", um.Rating))
 		}
@@ -439,10 +452,126 @@ func (h *CommandHandler) handleRate(cmd *models.BotCommand) *models.BotResponse 
 	}
 }
 
+// parseProgress parses different progress formats and returns a Progress struct
+func parseProgress(input string, mediaType models.MediaType) (*models.Progress, error) {
+	input = strings.TrimSpace(input)
+
+	// Handle percentage format: "50%"
+	if strings.HasSuffix(input, "%") {
+		percentStr := strings.TrimSuffix(input, "%")
+		percent, err := strconv.ParseFloat(percentStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid percentage format")
+		}
+		if percent < 0 || percent > 100 {
+			return nil, fmt.Errorf("percentage must be between 0 and 100")
+		}
+		return &models.Progress{
+			Current: percent,
+			Total:   100,
+			Unit:    "percentage",
+			Details: fmt.Sprintf("%.1f%%", percent),
+		}, nil
+	}
+
+	// Handle fraction format: "5/12" or "150/300"
+	if strings.Contains(input, "/") {
+		parts := strings.Split(input, "/")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid fraction format, use 'current/total'")
+		}
+
+		current, err := strconv.ParseFloat(parts[0], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid current value in fraction")
+		}
+
+		total, err := strconv.ParseFloat(parts[1], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid total value in fraction")
+		}
+
+		if current < 0 || total <= 0 || current > total {
+			return nil, fmt.Errorf("invalid fraction: current must be 0-%v, total must be positive", total)
+		}
+
+		unit := getUnitForMediaType(mediaType)
+		return &models.Progress{
+			Current: current,
+			Total:   total,
+			Unit:    unit,
+			Details: fmt.Sprintf("%.0f/%.0f", current, total),
+		}, nil
+	}
+
+	// Handle season-episode format: "s2e5" or "S2E5"
+	seasonEpisodeRegex := regexp.MustCompile(`(?i)^s(\d+)e(\d+)$`)
+	if match := seasonEpisodeRegex.FindStringSubmatch(input); match != nil {
+		season, _ := strconv.ParseFloat(match[1], 64)
+		episode, _ := strconv.ParseFloat(match[2], 64)
+
+		return &models.Progress{
+			Current: episode,
+			Total:   0, // Unknown total
+			Unit:    "episodes",
+			Details: fmt.Sprintf("S%.0fE%.0f", season, episode),
+		}, nil
+	}
+
+	// Handle simple number (episode/chapter number)
+	if num, err := strconv.ParseFloat(input, 64); err == nil {
+		if num < 0 {
+			return nil, fmt.Errorf("progress cannot be negative")
+		}
+
+		unit := getUnitForMediaType(mediaType)
+		return &models.Progress{
+			Current: num,
+			Total:   0, // Unknown total
+			Unit:    unit,
+			Details: fmt.Sprintf("%.0f", num),
+		}, nil
+	}
+
+	// Handle special keywords
+	switch strings.ToLower(input) {
+	case "watched", "completed":
+		return &models.Progress{
+			Current: 1,
+			Total:   1,
+			Unit:    "watched",
+			Details: "completed",
+		}, nil
+	case "unwatched", "reset":
+		return &models.Progress{
+			Current: 0,
+			Total:   0,
+			Unit:    "episodes",
+			Details: "reset",
+		}, nil
+	}
+
+	return nil, fmt.Errorf("invalid progress format. Examples: '5/12', 's2e5', '50%', '5', 'watched'")
+}
+
+// getUnitForMediaType returns the appropriate unit for a media type
+func getUnitForMediaType(mediaType models.MediaType) string {
+	switch mediaType {
+	case models.MediaTypeMovie:
+		return "watched"
+	case models.MediaTypeTV, models.MediaTypeAnime:
+		return "episodes"
+	case models.MediaTypeBook:
+		return "chapters"
+	default:
+		return "episodes"
+	}
+}
+
 func (h *CommandHandler) handleProgress(cmd *models.BotCommand) *models.BotResponse {
 	if len(cmd.Args) < 2 {
 		return &models.BotResponse{
-			Message: "Usage: /progress <media_id> <episode_number>\nExample: /progress 1 5\nUse 0 to reset progress",
+			Message: "Usage: /progress <media_id> <progress>\nExamples:\n  /progress 1 5/12 (episode 5 of 12)\n  /progress 1 s2e5 (season 2 episode 5)\n  /progress 1 50% (50% complete)\n  /progress 1 watched (mark as watched)\n  /progress 1 5 (episode 5)",
 			Success: false,
 		}
 	}
@@ -452,23 +581,6 @@ func (h *CommandHandler) handleProgress(cmd *models.BotCommand) *models.BotRespo
 	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
 		return &models.BotResponse{
 			Message: "Invalid media ID. Please provide a numeric ID.",
-			Success: false,
-		}
-	}
-
-	// Parse progress
-	var progress int
-	if _, err := fmt.Sscanf(cmd.Args[1], "%d", &progress); err != nil {
-		return &models.BotResponse{
-			Message: "Invalid progress. Please provide a number (episode number).",
-			Success: false,
-		}
-	}
-
-	// Validate progress range
-	if progress < 0 {
-		return &models.BotResponse{
-			Message: "Progress cannot be negative. Use 0 to reset progress.",
 			Success: false,
 		}
 	}
@@ -496,8 +608,18 @@ func (h *CommandHandler) handleProgress(cmd *models.BotCommand) *models.BotRespo
 		}
 	}
 
+	// Parse progress input
+	progressInput := strings.Join(cmd.Args[1:], " ")
+	progress, err := parseProgress(progressInput, media.Type)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error parsing progress: " + err.Error(),
+			Success: false,
+		}
+	}
+
 	// Update progress using service method
-	err = h.mediaService.UpdateProgress(cmd.UserID, mediaID, progress)
+	err = h.mediaService.UpdateProgress(cmd.UserID, mediaID, *progress)
 	if err != nil {
 		return &models.BotResponse{
 			Message: "Error updating progress: " + err.Error(),
@@ -505,12 +627,19 @@ func (h *CommandHandler) handleProgress(cmd *models.BotCommand) *models.BotRespo
 		}
 	}
 
-	// Determine status message based on progress
+	// Create success message
 	var statusMsg string
-	if progress == 0 {
+	switch progress.Details {
+	case "completed":
+		statusMsg = "Marked as watched"
+	case "reset":
 		statusMsg = "Reset progress"
-	} else {
-		statusMsg = fmt.Sprintf("Updated progress to episode %d", progress)
+	default:
+		if progress.Total > 0 {
+			statusMsg = fmt.Sprintf("Updated progress to %s", progress.Details)
+		} else {
+			statusMsg = fmt.Sprintf("Updated progress to %s %s", progress.Details, progress.Unit)
+		}
 	}
 
 	return &models.BotResponse{
