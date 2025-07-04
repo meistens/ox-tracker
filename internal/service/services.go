@@ -139,3 +139,13 @@ func (s *MediaService) AddMediaToUser(userID, extID, title string, mediaType mod
 	}
 	return media, nil
 }
+
+func (s *MediaService) UpdateUserMediaStatus(userID string, mediaID int, status models.Status) error {
+	userMedia := &models.UserMedia{
+		UserID:  userID,
+		MediaID: mediaID,
+		Status:  status,
+	}
+
+	return s.repositories.UserMedia.InsertUserMedia(userMedia)
+}
