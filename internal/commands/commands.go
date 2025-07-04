@@ -52,6 +52,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleDelete(cmd)
 	case "notes":
 		return h.handleNotes(cmd)
+	case "help":
+		return h.handleHelp(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -794,6 +796,54 @@ func (h *CommandHandler) handleNotes(cmd *models.BotCommand) *models.BotResponse
 
 	return &models.BotResponse{
 		Message: responseMsg,
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) handleHelp(_ *models.BotCommand) *models.BotResponse {
+	helpText := `🎬 *Media Tracker Bot - Available Commands*
+
+🔍 *Search & Discovery*
+• /search <type> <query> - Search for media
+  Example: /search anime naruto
+
+📋 *List Management*
+• /list - Show your media list
+• /getlist [status] - Detailed list with filtering
+  Example: /getlist completed
+• /add <media_id or name> - Add media to your list
+  Example: /add 1 or /add naruto
+
+📊 *Status & Progress*
+• /status <media_id> <status> - Update viewing status
+  Statuses: watching, completed, plan_to_read, on_hold, dropped, watchlist
+  Example: /status 1 completed
+• /progress <media_id> <progress> - Update progress
+  Examples: /progress 1 5/12, /progress 1 s2e5, /progress 1 50%
+• /rate <media_id> <rating> - Rate media (0.0-10.0)
+  Example: /rate 1 8.5
+
+📝 *Notes & Reminders*
+• /notes <media_id> <text> - Add/edit notes
+  Example: /notes 1 Great series!
+• /remind <media_id> <time> <message> - Set reminder
+  Examples: /remind 1 2h Continue watching
+  Time formats: 30m, 2h, 1d, 1w
+
+🗑️ *Management*
+• /delete <media_id> - Remove from your list
+  Example: /delete 1
+
+💡 *Tips*
+• Use /search to find media IDs
+• Progress supports: 5/12, s2e5, 50%, watched, reset
+• Reminders work for any media in your list
+• Notes are personal and only you can see them
+
+Need help with a specific command? Just ask!`
+
+	return &models.BotResponse{
+		Message: helpText,
 		Success: true,
 	}
 }
