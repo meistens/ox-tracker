@@ -43,6 +43,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleRate(cmd)
 	case "progress":
 		return h.handleProgress(cmd)
+	case "getlist":
+		return h.handleGetList(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -448,6 +450,95 @@ func (h *CommandHandler) handleRate(cmd *models.BotCommand) *models.BotResponse 
 
 	return &models.BotResponse{
 		Message: fmt.Sprintf("Rated '%s' with %.1f/10 stars!", media.Title, rating),
+		Success: true,
+	}
+}
+
+func (h *CommandHandler) handleGetList(cmd *models.BotCommand) *models.BotResponse {
+	// Parse optional status filter
+	var status models.Status
+	if len(cmd.Args) > 0 {
+		statusStr := strings.ToLower(cmd.Args[0])
+		switch statusStr {
+		case "watching":
+			status = models.StatusWatching
+		case "completed":
+			status = models.StatusCompleted
+		case "plan_to_read":
+			status = models.StatusPlanToRead
+		case "on_hold":
+			status = models.StatusOnHold
+		case "dropped":
+			status = models.StatusDropped
+		case "watchlist":
+			status = models.StatusWatchlist
+		case "all":
+			status = ""
+		default:
+			return &models.BotResponse{
+				Message: "Usage: /getlist [status]\nAvailable statuses: watching, completed, plan_to_read, on_hold, dropped, watchlist, all\nExample: /getlist completed",
+				Success: false,
+			}
+		}
+	}
+
+	// Get detailed user media list using service method
+	detailedList, err := h.mediaService.GetUserMediaList(cmd.UserID, status)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error fetching your list: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	if len(detailedList) == 0 {
+		statusMsg := "all media"
+		if status != "" {
+			statusMsg = string(status)
+		}
+		return &models.BotResponse{
+			Message: fmt.Sprintf("Your %s list is empty! Use /search to find media to add", statusMsg),
+			Success: true,
+		}
+	}
+
+	// Format detailed user's media list
+	var response strings.Builder
+	statusMsg := "All Media"
+	if status != "" {
+		statusMsg = fmt.Sprintf("%s Media", strings.Title(string(status)))
+	}
+	response.WriteString(fmt.Sprintf("Your %s List:\n\n", statusMsg))
+
+	for i, item := range detailedList {
+		response.WriteString(fmt.Sprintf("%d. %s (%s)\n", i+1, item.Media.Title, item.Media.Type))
+		response.WriteString(fmt.Sprintf("   ID: %d\n", item.MediaID))
+		response.WriteString(fmt.Sprintf("   Status: %s\n", item.Status))
+
+		// Display progress based on the new format
+		if item.Progress.Current > 0 {
+			if item.Progress.Total > 0 {
+				response.WriteString(fmt.Sprintf("   Progress: %s (%s)\n", item.Progress.Details, item.Progress.Unit))
+			} else {
+				response.WriteString(fmt.Sprintf("   Progress: %s %s\n", item.Progress.Details, item.Progress.Unit))
+			}
+		} else if item.Progress.Details == "completed" {
+			response.WriteString("   Progress: Completed\n")
+		}
+
+		if item.Rating > 0 {
+			response.WriteString(fmt.Sprintf("   Rating: %.1f/10\n", item.Rating))
+		}
+
+		if item.Notes != "" {
+			response.WriteString(fmt.Sprintf("   Notes: %s\n", item.Notes))
+		}
+
+		response.WriteString("\n")
+	}
+
+	return &models.BotResponse{
+		Message: response.String(),
 		Success: true,
 	}
 }
