@@ -35,6 +35,8 @@ func (h *CommandHandler) HandleBotCommand(cmd *models.BotCommand) *models.BotRes
 		return h.handleList(cmd)
 	case "add":
 		return h.handleAdd(cmd)
+	case "status":
+		return h.handleStatus(cmd)
 	default:
 		return &models.BotResponse{
 			Message: "Unknown command. Type /help for available commands.",
@@ -280,6 +282,84 @@ func (h *CommandHandler) handleAdd(cmd *models.BotCommand) *models.BotResponse {
 			Message: fmt.Sprintf("Added '%s' to your watchlist!", addedMedia.Title),
 			Success: true,
 		}
+	}
+}
+
+func (h *CommandHandler) handleStatus(cmd *models.BotCommand) *models.BotResponse {
+	if len(cmd.Args) < 2 {
+		return &models.BotResponse{
+			Message: "Usage: /status <media_id> <status>\nExample: /status 1 completed\nAvailable statuses: watching, completed, plan_to_read, on_hold, dropped, watchlist",
+			Success: false,
+		}
+	}
+
+	// Parse media ID
+	var mediaID int
+	if _, err := fmt.Sscanf(cmd.Args[0], "%d", &mediaID); err != nil {
+		return &models.BotResponse{
+			Message: "Invalid media ID. Please provide a numeric ID.",
+			Success: false,
+		}
+	}
+
+	// Parse status
+	statusStr := strings.ToLower(cmd.Args[1])
+	var status models.Status
+	switch statusStr {
+	case "watching":
+		status = models.StatusWatching
+	case "completed":
+		status = models.StatusCompleted
+	case "plan_to_read":
+		status = models.StatusPlanToRead
+	case "on_hold":
+		status = models.StatusOnHold
+	case "dropped":
+		status = models.StatusDropped
+	case "watchlist":
+		status = models.StatusWatchlist
+	default:
+		return &models.BotResponse{
+			Message: "Invalid status. Available statuses: watching, completed, plan_to_read, on_hold, dropped, watchlist",
+			Success: false,
+		}
+	}
+
+	// Ensure user exists
+	user := &models.User{
+		ID:       cmd.UserID,
+		Username: "user",
+		Platform: "telegram",
+	}
+	err := h.userRepo.CreateUser(user)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error creating user: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	// Check if media exists
+	media, err := h.mediaRepo.GetByID(mediaID)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Media not found with that ID. Use /search to find valid media IDs.",
+			Success: false,
+		}
+	}
+
+	// Update status using service method
+	err = h.mediaService.UpdateUserMediaStatus(cmd.UserID, mediaID, status)
+	if err != nil {
+		return &models.BotResponse{
+			Message: "Error updating status: " + err.Error(),
+			Success: false,
+		}
+	}
+
+	return &models.BotResponse{
+		Message: fmt.Sprintf("Updated status for '%s' to %s!", media.Title, statusStr),
+		Success: true,
 	}
 }
 
