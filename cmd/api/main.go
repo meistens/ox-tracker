@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"log"
+	"mtracker/internal/bot/telegram"
+	"mtracker/internal/commands"
 	"mtracker/internal/config"
 	"mtracker/internal/db"
 	"mtracker/seed"
@@ -50,6 +52,19 @@ func main() {
 	mux := http.NewServeMux()
 	addr := cfg.Server.Port
 	mux.HandleFunc("/v1/health", app.healthCheckHandler)
+
+	// Initialize command handler and telegram handler
+	cmdHandler := commands.NewCommandHandler()
+	tgHandler := telegram.NewTelegramHandler(cfg.BotTokens.TelegramToken, cmdHandler)
+
+	// --- Telegram Bot Startup (polling mode for local development) ---
+	go func() {
+		if err := tgHandler.Start(); err != nil {
+			log.Printf("Telegram bot error: %v", err)
+		}
+	}()
+	log.Println("Telegram bot running in polling mode")
+	// --- End Telegram Bot Startup ---
 
 	server := &http.Server{
 		Addr:         ":" + strconv.Itoa(addr),
