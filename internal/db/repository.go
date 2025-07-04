@@ -299,6 +299,6 @@ func NewRepositories(db *DB) *Repositories {
 	}
 }
 
-// TODO: Get Discord Bot Tokens and Creeate another Telegram Bot
+// TODO: Creeate another Telegram Bot
 // Seeding not really enough for it...
 // TODO: adapt some logic to handle duplicate entries
