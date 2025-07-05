@@ -7,6 +7,7 @@ import (
 	"mtracker/internal/db"
 	"mtracker/internal/models"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -18,17 +19,210 @@ type MediaTracker interface {
 type APIClient struct {
 	tmdbAPIKey string
 	httpClient *http.Client
+
+	// Rate limiting
+	rateLimiters map[string]*RateLimiter
+	mu           sync.RWMutex
+
+	// Caching
+	cache   map[string]*CacheEntry
+	cacheMu sync.RWMutex
+}
+
+type RateLimiter struct {
+	// Multiple time windows for different limits
+	secondLimiter *TokenBucket
+	minuteLimiter *TokenBucket
+	mu            sync.Mutex
+}
+
+type TokenBucket struct {
+	tokens     int
+	maxTokens  int
+	lastRefill time.Time
+	refillRate time.Duration
+}
+
+func NewRateLimiter(maxTokens int, refillRate time.Duration) *RateLimiter {
+	return &RateLimiter{
+		secondLimiter: NewTokenBucket(maxTokens, refillRate),
+		minuteLimiter: NewTokenBucket(maxTokens, refillRate),
+	}
+}
+
+func NewTokenBucket(maxTokens int, refillRate time.Duration) *TokenBucket {
+	return &TokenBucket{
+		tokens:     maxTokens,
+		maxTokens:  maxTokens,
+		lastRefill: time.Now(),
+		refillRate: refillRate,
+	}
+}
+
+func (r *RateLimiter) Allow() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check both second and minute limits
+	if !r.secondLimiter.allow() || !r.minuteLimiter.allow() {
+		return false
+	}
+
+	return true
+}
+
+func (t *TokenBucket) allow() bool {
+	// Refill tokens
+	now := time.Now()
+	elapsed := now.Sub(t.lastRefill)
+	tokensToAdd := int(elapsed / t.refillRate)
+
+	if tokensToAdd > 0 {
+		t.tokens = min(t.maxTokens, t.tokens+tokensToAdd)
+		t.lastRefill = now
+	}
+
+	// Check if we can make a request
+	if t.tokens > 0 {
+		t.tokens--
+		return true
+	}
+
+	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+type CacheEntry struct {
+	Data      interface{}
+	ExpiresAt time.Time
 }
 
 func NewAPIClient(tmdbAPIKey string) *APIClient {
-	return &APIClient{
-		tmdbAPIKey: tmdbAPIKey,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+	// Initialize rate limiters for different APIs
+	rateLimiters := make(map[string]*RateLimiter)
+
+	// Jikan API: 3 requests per second, 60 requests per minute
+	rateLimiters["jikan"] = &RateLimiter{
+		secondLimiter: NewTokenBucket(3, time.Second),  // 3 requests per second
+		minuteLimiter: NewTokenBucket(60, time.Minute), // 60 requests per minute
 	}
+
+	// TMDB API: 40 requests per 10 seconds (4 requests per second)
+	rateLimiters["tmdb"] = NewRateLimiter(40, 10*time.Second)
+
+	return &APIClient{
+		tmdbAPIKey:   tmdbAPIKey,
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		rateLimiters: rateLimiters,
+		cache:        make(map[string]*CacheEntry),
+	}
+}
+
+// Cache methods
+func (t *APIClient) getCache(key string) (interface{}, bool) {
+	t.cacheMu.RLock()
+	defer t.cacheMu.RUnlock()
+
+	entry, exists := t.cache[key]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if expired
+	if time.Now().After(entry.ExpiresAt) {
+		// Remove expired entry
+		t.cacheMu.RUnlock()
+		t.cacheMu.Lock()
+		delete(t.cache, key)
+		t.cacheMu.Unlock()
+		t.cacheMu.RLock()
+		return nil, false
+	}
+
+	return entry.Data, true
+}
+
+func (t *APIClient) setCache(key string, data interface{}, ttl time.Duration) {
+	t.cacheMu.Lock()
+	defer t.cacheMu.Unlock()
+
+	t.cache[key] = &CacheEntry{
+		Data:      data,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+}
+
+// Jikan API SearchAnime
+func (t *APIClient) SearchAnime(query string) ([]models.JikanAnime, error) {
+	// Check cache first
+	cacheKey := fmt.Sprintf("jikan:%s", query)
+	if cached, exists := t.getCache(cacheKey); exists {
+		if anime, ok := cached.([]models.JikanAnime); ok {
+			return anime, nil
+		}
+	}
+
+	// Check rate limit
+	t.mu.RLock()
+	limiter, exists := t.rateLimiters["jikan"]
+	t.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("rate limiter not configured for jikan")
+	}
+
+	if !limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded for Jikan API, please try again later")
+	}
+
+	url := fmt.Sprintf("https://api.jikan.moe/v4/anime?q=%s&limit=10", query)
+
+	resp, err := t.httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var searchResp models.JikanSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+		return nil, err
+	}
+
+	// Cache successful results for 1 hour
+	t.setCache(cacheKey, searchResp.Data, time.Hour)
+
+	return searchResp.Data, nil
 }
 
 // TBA when I can get a domain up and running or get a replacement
 func (t *APIClient) SearchTMDB(query string, mediaType models.MediaType) ([]models.TMDBMedia, error) {
+	// Check cache first
+	cacheKey := fmt.Sprintf("tmdb:%s:%s", mediaType, query)
+	if cached, exists := t.getCache(cacheKey); exists {
+		if media, ok := cached.([]models.TMDBMedia); ok {
+			return media, nil
+		}
+	}
+
+	// Check rate limit
+	t.mu.RLock()
+	limiter, exists := t.rateLimiters["tmdb"]
+	t.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("rate limiter not configured for tmdb")
+	}
+
+	if !limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded for TMDB API, please try again later")
+	}
+
 	var endpoint string
 
 	switch mediaType {
@@ -54,25 +248,10 @@ func (t *APIClient) SearchTMDB(query string, mediaType models.MediaType) ([]mode
 		return nil, err
 	}
 
+	// Cache successful results for 1 hour
+	t.setCache(cacheKey, searchResp.Results, time.Hour)
+
 	return searchResp.Results, nil
-}
-
-// Jikan API SearchAnime
-func (t *APIClient) SearchAnime(query string) ([]models.JikanAnime, error) {
-	url := fmt.Sprintf("https://api.jikan.moe/v4/anime?q=%s&limit=10", query)
-
-	resp, err := t.httpClient.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var searchResp models.JikanSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return nil, err
-	}
-
-	return searchResp.Data, nil
 }
 
 // MedisService handles media-related logic
